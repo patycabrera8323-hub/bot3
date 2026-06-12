@@ -45,12 +45,12 @@
       <div style="text-align: center; margin-bottom: 24px;">
         <i class="bx bx-cylinder" style="font-size: 3.5rem; color: var(--color-primary); text-shadow: 0 0 10px var(--color-primary-glow);"></i>
         <h1 style="font-size: 1.8rem; margin-top: 10px;">Inicializador de Base de Datos</h1>
-        <p style="color: var(--text-muted); font-size: 0.9rem; margin-top: 4px;">Crea la estructura de colecciones en tu Firebase Firestore (mi-local-2ac9f)</p>
+        <p style="color: var(--text-muted); font-size: 0.9rem; margin-top: 4px;">Crea la estructura de colecciones en tu Firebase Firestore (bot-nuevo-bdf67)</p>
       </div>
 
       <div class="alert-info-box" style="margin-bottom: 20px;">
         <i class="bx bx-info-circle"></i>
-        <p>Este script creará las colecciones de <strong>users</strong>, <strong>businesses</strong> y las subcolecciones de <strong>products</strong> para el proyecto de base de datos <strong>ai-studio-d3ccc3e7-3fa0-4dee-a0d6-338edf0f7c53</strong>.</p>
+        <p>Este script limpiará las colecciones obsoletas (<code>productos</code>, <code>restaurantes</code>, <code>usuarios</code>, <code>pedidos</code>) y creará la nueva estructura organizada (<code>users</code>, <code>businesses</code> y subcolecciones <code>products</code>).</p>
       </div>
 
       <div style="display: flex; gap: 12px; justify-content: center;">
@@ -58,7 +58,7 @@
           <i class="bx bx-arrow-back"></i> Volver al Bot
         </a>
         <button class="primary-btn" id="btn-run-seed">
-          <i class="bx bx-play-circle"></i> Iniciar Semillero / Seed
+          <i class="bx bx-play-circle"></i> Iniciar Limpieza y Semillero
         </button>
       </div>
 
@@ -69,7 +69,7 @@
   </div>
 
   <script type="module">
-    import { db, isFirebaseEnabled, collection, doc, setDoc } from './firebase-config.js';
+    import { db, isFirebaseEnabled, collection, doc, setDoc, getDocs, deleteDoc } from './firebase-config.js';
 
     const logOutput = document.getElementById("log-output");
     const btnRunSeed = document.getElementById("btn-run-seed");
@@ -82,6 +82,26 @@
       logOutput.scrollTop = logOutput.scrollHeight;
     }
 
+    // Helper to delete all documents in a collection
+    async function deleteCollectionDocs(collectionName) {
+      log(`Buscando documentos obsoletos en colección '${collectionName}'...`, "info");
+      try {
+        const querySnapshot = await getDocs(collection(db, collectionName));
+        let count = 0;
+        for (const docSnap of querySnapshot.docs) {
+          await deleteDoc(doc(db, collectionName, docSnap.id));
+          count++;
+        }
+        if (count > 0) {
+          log(`Eliminados ${count} documentos obsoletos de '${collectionName}'`, "success");
+        } else {
+          log(`Colección '${collectionName}' ya estaba vacía o no existía`, "info");
+        }
+      } catch (err) {
+        log(`No se pudo limpiar '${collectionName}': ${err.message}`, "info");
+      }
+    }
+
     btnRunSeed.addEventListener("click", async () => {
       if (!isFirebaseEnabled) {
         log("ERROR: Firebase no está configurado en firebase-config.js. Revisa las claves primero.", "error");
@@ -91,9 +111,17 @@
 
       btnRunSeed.disabled = true;
       logOutput.innerHTML = "";
-      log("Iniciando semillero de base de datos...", "info");
+      log("Iniciando limpieza de colecciones duplicadas...", "info");
 
       try {
+        // --- 0. CLEAN UP OBSOLETE COLLECTIONS ---
+        const obsoleteCollections = ["productos", "restaurantes", "usuarios", "pedidos"];
+        for (const colName of obsoleteCollections) {
+          await deleteCollectionDocs(colName);
+        }
+
+        log("Limpieza de duplicados finalizada con éxito. Iniciando semillero...", "success");
+
         // --- 1. SEED USERS / ADMINS ---
         log("Creando colección 'users' para roles...", "info");
         
@@ -289,8 +317,8 @@
           }
         }
 
-        log("¡BASE DE DATOS INICIALIZADA CON ÉXITO! 🎉", "success");
-        log("Ya puedes recargar tus páginas para probar la sincronización.", "success");
+        log("¡BASE DE DATOS INICIALIZADA Y LIMPIA! 🎉", "success");
+        log("Las colecciones obsoletas han sido borradas y tu Firestore está ordenado.", "success");
 
       } catch (error) {
         log(`ERROR AL INICIALIZAR LA BASE DE DATOS: ${error.message}`, "error");
