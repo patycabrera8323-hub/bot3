@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Admin Panel - Nexus AI</title>
+  <!-- Google Fonts: Outfit & Space Grotesk -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <!-- Boxicons for modern icons -->
+  <link href="https://unpkg.com/boxicons@2.1.4/css/boxicons.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="index.css">
+  <meta name="theme-color" content="#0b0f19">
+</head>
+<body class="dark-theme">
+
+  <!-- BACKGROUND DECORATIONS -->
+  <div class="bg-glow bg-glow-1"></div>
+  <div class="bg-glow bg-glow-2"></div>
+
+  <!-- MAIN APP CONTAINER -->
+  <div class="app-container">
+    
+    <!-- HEADER NAVBAR -->
+    <header class="app-header">
+      <div class="header-logo">
+        <a href="./index.html" class="action-btn" title="Volver al Chat" style="text-decoration:none; display:flex; align-items:center; justify-content:center;">
+          <i class="bx bx-chevron-left"></i>
+        </a>
+        <div class="logo-text">
+          <h1>NEXUS <span class="accent-text">ADMIN</span></h1>
+          <p>Consola de Gestión Autoadministrable</p>
+        </div>
+      </div>
+      
+      <!-- Nav Link to Delivery -->
+      <nav class="role-nav">
+        <a href="./delivery.html" class="nav-tab" style="text-decoration: none;">
+          <i class="bx bx-cycling"></i> <span>Ver Repartidores</span>
+        </a>
+      </nav>
+    </header>
+
+    <!-- CONTENT VIEWS -->
+    <main class="app-content">
+      <div class="admin-layout">
+        
+        <!-- Left sidebar/tabs inside Admin -->
+        <div class="admin-sidebar">
+          <div class="card glass-card admin-tabs-card">
+            <button class="admin-tab active" data-admin-panel="panel-products">
+              <i class="bx bx-food-menu"></i> Gestión de Productos
+            </button>
+            <button class="admin-tab" data-admin-panel="panel-orders">
+              <i class="bx bx-receipt"></i> Historial de Pedidos
+              <span class="admin-badge" id="admin-pending-badge">0</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Main Admin Panels -->
+        <div class="admin-main-panel">
+          
+          <!-- A. Product Management -->
+          <div id="panel-products" class="admin-subpanel active">
+            <div class="panel-header">
+              <h2>Gestión del Catálogo</h2>
+              <button class="primary-btn" id="btn-add-product">
+                <i class="bx bx-plus"></i> Agregar Producto
+              </button>
+            </div>
+
+            <div class="card glass-card table-card">
+              <div class="table-responsive">
+                <table class="admin-table">
+                  <thead>
+                    <tr>
+                      <th>Imagen</th>
+                      <th>Nombre</th>
+                      <th>Categoría</th>
+                      <th>Precio</th>
+                      <th>Descripción</th>
+                      <th>Acciones</th>
+                    </tr>
+                  </thead>
+                  <tbody id="admin-products-list">
+                    <!-- Dynamically rendered admin products -->
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+
+          <!-- B. Orders History -->
+          <div id="panel-orders" class="admin-subpanel">
+            <div class="panel-header">
+              <h2>Pedidos y Ventas</h2>
+              <button class="secondary-btn" id="btn-clear-orders">
+                <i class="bx bx-trash"></i> Limpiar Historial
+              </button>
+            </div>
+
+            <div class="orders-list-grid" id="admin-orders-list">
+              <!-- Dynamically rendered orders -->
+              <div class="no-data-msg">No hay pedidos registrados aún.</div>
+            </div>
+          </div>
+
+        </div>
+
+      </div>
+    </main>
+
+    <!-- PRODUCT FORM MODAL (Add/Edit Product) -->
+    <div class="modal-overlay" id="modal-product-form">
+      <div class="card glass-card modal-card animate-slide-up">
+        <div class="modal-header">
+          <h2 id="product-modal-title">Agregar Nuevo Producto</h2>
+          <button class="close-btn" id="btn-close-product-modal"><i class="bx bx-x"></i></button>
+        </div>
+        <form id="form-product">
+          <input type="hidden" id="prod-id">
+          <div class="modal-body">
+            <div class="form-group">
+              <label for="prod-name">Nombre del Producto *</label>
+              <input type="text" id="prod-name" class="form-control" placeholder="Ej. Pizza Margarita" required>
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <label for="prod-category">Categoría *</label>
+                <select id="prod-category" class="form-control" required>
+                  <option value="comida">Comidas</option>
+                  <option value="bebida">Bebidas</option>
+                  <option value="postre">Postres</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label for="prod-price">Precio ($) *</label>
+                <input type="number" step="0.01" id="prod-price" class="form-control" placeholder="Ej. 12.50" required>
+              </div>
+            </div>
+            <div class="form-group">
+              <label for="prod-img">Enlace / URL de la Imagen</label>
+              <input type="text" id="prod-img" class="form-control" placeholder="https://ejemplo.com/imagen.jpg (Dejar vacío para imagen por defecto)">
+            </div>
+            <div class="form-group">
+              <label for="prod-desc">Descripción</label>
+              <textarea id="prod-desc" class="form-control" rows="3" placeholder="Ingredientes, tamaño o detalles del producto..."></textarea>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="secondary-btn" id="btn-cancel-product-modal">Cancelar</button>
+            <button type="submit" class="primary-btn">Guardar Producto</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+  </div>
+
+  <script type="module" src="admin-app.js"></script>
+</body>
+</html>

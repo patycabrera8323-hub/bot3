@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Catálogo PWA - Nexus Shop</title>
+  <!-- Google Fonts: Outfit & Space Grotesk -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <!-- Boxicons for modern icons -->
+  <link href="https://unpkg.com/boxicons@2.1.4/css/boxicons.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="index.css">
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#0b0f19">
+</head>
+<body class="dark-theme">
+
+  <!-- BACKGROUND DECORATIONS -->
+  <div class="bg-glow bg-glow-1"></div>
+  <div class="bg-glow bg-glow-2"></div>
+
+  <!-- MAIN APP CONTAINER -->
+  <div class="app-container catalog-standalone-container">
+    
+    <!-- HEADER NAVBAR -->
+    <header class="app-header">
+      <div class="header-logo">
+        <a href="./index.html" class="action-btn" title="Volver al Chat" style="text-decoration:none; display:flex; align-items:center; justify-content:center;">
+          <i class="bx bx-chevron-left"></i>
+        </a>
+        <div class="logo-text">
+          <h1>NEXUS <span class="accent-text">SHOP</span></h1>
+          <p>Catálogo Digital Autoadministrable</p>
+        </div>
+      </div>
+
+      <!-- Quick Actions -->
+      <div class="header-actions">
+        <button class="cart-toggle-btn" id="btn-cart-toggle">
+          <i class="bx bx-shopping-bag"></i>
+          <span class="cart-badge" id="cart-counter">0</span>
+        </button>
+      </div>
+    </header>
+
+    <!-- CONTENT VIEWS (CATALOG GRID ONLY) -->
+    <main class="app-content catalog-standalone-content">
+      <div class="card glass-card catalog-card" style="height: 100%;">
+        <div class="catalog-header">
+          <div class="search-bar">
+            <i class="bx bx-search search-icon"></i>
+            <input type="text" id="catalog-search" placeholder="Buscar productos...">
+          </div>
+        </div>
+
+        <!-- Category tabs -->
+        <div class="category-tabs" id="catalog-categories">
+          <button class="category-tab active" data-category="all">Todos</button>
+          <button class="category-tab" data-category="comida">Comidas</button>
+          <button class="category-tab" data-category="bebida">Bebidas</button>
+          <button class="category-tab" data-category="postre">Postres</button>
+        </div>
+
+        <!-- Products Grid -->
+        <div class="products-grid" id="catalog-products-grid">
+          <!-- Products dynamically rendered here -->
+        </div>
+      </div>
+    </main>
+
+    <!-- SHOPPING CART SLIDE DRAWER -->
+    <div class="cart-drawer-overlay" id="cart-overlay"></div>
+    <div class="cart-drawer" id="cart-drawer">
+      <div class="cart-drawer-header">
+        <h2>Mi Carrito</h2>
+        <button class="close-btn" id="btn-cart-close">
+          <i class="bx bx-x"></i>
+        </button>
+      </div>
+
+      <div class="cart-items-list" id="cart-items-container">
+        <!-- Cart items rendered dynamically -->
+        <div class="empty-cart-msg">
+          <i class="bx bx-cart-alt"></i>
+          <p>Tu carrito está vacío</p>
+        </div>
+      </div>
+
+      <div class="cart-footer">
+        <div class="cart-totals">
+          <div class="total-row">
+            <span>Subtotal:</span>
+            <span id="cart-subtotal">$0.00</span>
+          </div>
+          <div class="total-row">
+            <span>Envío a domicilio:</span>
+            <span id="cart-shipping" class="text-success">Gratis</span>
+          </div>
+          <div class="total-row grand-total">
+            <span>Total:</span>
+            <span id="cart-total">$0.00</span>
+          </div>
+        </div>
+
+        <div class="checkout-form">
+          <input type="text" id="checkout-name" placeholder="Tu Nombre Completo *" required>
+          <input type="text" id="checkout-phone" placeholder="Celular / WhatsApp *" required>
+          <input type="text" id="checkout-address" placeholder="Dirección de entrega * (o 'Retiro en Local')">
+        </div>
+
+        <button class="primary-btn checkout-btn" id="btn-checkout-submit">
+          <i class="bx bx-check-double"></i> Confirmar Pedido y Enviar al Bot
+        </button>
+      </div>
+    </div>
+
+  </div>
+
+  <script type="module" src="catalog-app.js"></script>
+</body>
+</html>

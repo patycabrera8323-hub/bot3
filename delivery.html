@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Repartidores - Nexus Delivery</title>
+  <!-- Google Fonts: Outfit & Space Grotesk -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <!-- Boxicons for modern icons -->
+  <link href="https://unpkg.com/boxicons@2.1.4/css/boxicons.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="index.css">
+  <meta name="theme-color" content="#0b0f19">
+</head>
+<body class="dark-theme">
+
+  <!-- BACKGROUND DECORATIONS -->
+  <div class="bg-glow bg-glow-1"></div>
+  <div class="bg-glow bg-glow-2"></div>
+
+  <!-- MAIN APP CONTAINER -->
+  <div class="app-container">
+    
+    <!-- HEADER NAVBAR -->
+    <header class="app-header">
+      <div class="header-logo">
+        <a href="./index.html" class="action-btn" title="Volver al Chat" style="text-decoration:none; display:flex; align-items:center; justify-content:center;">
+          <i class="bx bx-chevron-left"></i>
+        </a>
+        <div class="logo-text">
+          <h1>NEXUS <span class="accent-text">DELIVERY</span></h1>
+          <p>Consola de Despacho y Reparto</p>
+        </div>
+      </div>
+
+      <!-- Nav link to Admin -->
+      <nav class="role-nav">
+        <a href="./admin.html" class="nav-tab" style="text-decoration: none;">
+          <i class="bx bx-cog"></i> <span>Ver Admin</span>
+        </a>
+      </nav>
+    </header>
+
+    <!-- CONTENT VIEWS (DELIVERY BOARD ONLY) -->
+    <main class="app-content">
+      <div class="delivery-layout">
+        <div class="delivery-header">
+          <h2>Pedidos en Ruta & Entrega</h2>
+          <div class="delivery-status-card glass-card">
+            <div class="stat-item">
+              <span class="stat-label">En Espera:</span>
+              <span class="stat-val text-warning" id="deliv-waiting-count">0</span>
+            </div>
+            <div class="stat-item">
+              <span class="stat-label">En Camino:</span>
+              <span class="stat-val text-info" id="deliv-active-count">0</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Delivery Orders Board -->
+        <div class="delivery-board">
+          
+          <!-- Column 1: Ready for pickup -->
+          <div class="delivery-col">
+            <div class="col-title bg-warning-glow">
+              <i class="bx bx-package text-warning"></i>
+              <h3>Por Recoger / Preparados</h3>
+            </div>
+            <div class="col-content" id="deliv-col-prepared">
+              <!-- Ready orders -->
+              <div class="no-orders-placeholder">No hay pedidos listos.</div>
+            </div>
+          </div>
+
+          <!-- Column 2: In transit -->
+          <div class="delivery-col">
+            <div class="col-title bg-info-glow">
+              <i class="bx bx-map-pin text-info"></i>
+              <h3>En Ruta / Reparto</h3>
+            </div>
+            <div class="col-content" id="deliv-col-transit">
+              <!-- Active deliveries -->
+              <div class="no-orders-placeholder">No hay repartos en curso.</div>
+            </div>
+          </div>
+
+          <!-- Column 3: Completed today -->
+          <div class="delivery-col">
+            <div class="col-title bg-success-glow">
+              <i class="bx bx-check-circle text-success"></i>
+              <h3>Entregados Hoy</h3>
+            </div>
+            <div class="col-content" id="deliv-col-completed">
+              <!-- Completed deliveries -->
+              <div class="no-orders-placeholder">No hay entregas registradas hoy.</div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </main>
+
+  </div>
+
+  <script type="module" src="delivery-app.js"></script>
+</body>
+</html>

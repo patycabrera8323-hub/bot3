@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Nexus AI - Chatbot Inteligente</title>
+  <!-- Google Fonts: Outfit & Space Grotesk -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <!-- Boxicons for modern icons -->
+  <link href="https://unpkg.com/boxicons@2.1.4/css/boxicons.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="index.css">
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#0b0f19">
+</head>
+<body class="dark-theme chat-only-body">
+
+  <!-- BACKGROUND DECORATIONS -->
+  <div class="bg-glow bg-glow-1"></div>
+  <div class="bg-glow bg-glow-2"></div>
+
+  <!-- MAIN APP CONTAINER -->
+  <div class="app-container chat-only-container">
+    
+    <!-- HEADER NAVBAR -->
+    <header class="app-header">
+      <div class="header-logo">
+        <i class="bx bx-bot logo-icon"></i>
+        <div class="logo-text">
+          <h1>NEXUS <span class="accent-text">AI</span></h1>
+          <p>Bot de Pedidos Inteligente</p>
+        </div>
+      </div>
+
+      <!-- Quick Actions (Settings, Install PWA) -->
+      <div class="header-actions">
+        <button class="action-btn" id="btn-pwa-install" style="display: none;" title="Instalar como App PWA">
+          <i class="bx bx-download"></i>
+        </button>
+        <button class="action-btn" id="btn-open-settings" title="Configuración de IA (API Keys)">
+          <i class="bx bx-slider"></i>
+        </button>
+      </div>
+    </header>
+
+    <!-- CONTENT VIEWS (CHATBOT ONLY) -->
+    <main class="app-content chat-only-content">
+      <div class="chat-full-layout">
+        <div class="card glass-card chat-card">
+          <div class="chat-header">
+            <div class="bot-info">
+              <div class="bot-avatar">
+                <i class="bx bx-bot"></i>
+                <span class="online-indicator"></span>
+              </div>
+              <div>
+                <h3>Nexus AI Assistant</h3>
+                <p id="ai-model-badge">Modelo: Nemotron-3-Nano (NVIDIA)</p>
+              </div>
+            </div>
+            <button class="chat-clear-btn" id="btn-clear-chat" title="Limpiar Chat">
+              <i class="bx bx-trash"></i>
+            </button>
+          </div>
+
+          <!-- Message History -->
+          <div class="chat-history" id="chat-messages">
+            <!-- Welcome Message -->
+            <div class="message message-bot">
+              <div class="message-bubble">
+                <p>¡Hola! 👋 Bienvenido a Nexus. Soy tu asistente virtual con Inteligencia Artificial.</p>
+                <p>¿Qué te gustaría ordenar hoy? Puedes chatear conmigo o abrir directamente nuestro catálogo web móvil pulsando el botón de abajo.</p>
+                <div class="message-actions">
+                  <a href="./catalog.html" class="msg-action-btn" id="msg-btn-catalog" style="text-decoration: none;">
+                    <i class="bx bx-book-open"></i> Ver Catálogo Web
+                  </a>
+                </div>
+              </div>
+              <span class="message-time">Recién</span>
+            </div>
+          </div>
+
+          <!-- Quick suggestions -->
+          <div class="chat-suggestions">
+            <button class="suggestion-tag">🍔 Ver Menú / Catálogo</button>
+            <button class="suggestion-tag">📍 ¿Hacen entregas a domicilio?</button>
+            <button class="suggestion-tag">💳 Métodos de Pago</button>
+          </div>
+
+          <!-- Message Input -->
+          <div class="chat-input-area">
+            <input type="text" id="chat-input-text" placeholder="Escribe tu mensaje o pregunta..." autocomplete="off">
+            <button class="send-btn" id="btn-send-message">
+              <i class="bx bx-send"></i>
+            </button>
+          </div>
+        </div>
+      </div>
+    </main>
+
+    <!-- SETTINGS MODAL (AI Configuration) -->
+    <div class="modal-overlay" id="modal-settings">
+      <div class="card glass-card modal-card animate-slide-up">
+        <div class="modal-header">
+          <h2>Configuración de Inteligencia Artificial</h2>
+          <button class="close-btn" id="btn-close-settings"><i class="bx bx-x"></i></button>
+        </div>
+        <div class="modal-body">
+          <p class="modal-intro">Configura qué cerebro de IA impulsará tu Chatbot. Las claves se guardan de forma segura de forma local en tu navegador.</p>
+          
+          <div class="form-group">
+            <label for="ai-provider-select">Proveedor de IA:</label>
+            <select id="ai-provider-select" class="form-control">
+              <option value="nvidia">NVIDIA Nemotron 3 Nano Omni (Proxy Backend)</option>
+              <option value="gemini">Google Gemini 1.5 Flash (Proxy Backend)</option>
+              <option value="demo">Demo Local Inteligente (Gratuito, Sin Clave)</option>
+            </select>
+          </div>
+
+          <!-- NVIDIA configs -->
+          <div id="cfg-nvidia-group" class="provider-config-group">
+            <div class="alert-info-box">
+              <i class="bx bx-info-circle"></i>
+              <p>Nemotron 3 Nano Omni se ejecutará a través de nuestro servidor Proxy backend. Puedes ingresar una nueva clave si la clave interna ha expirado.</p>
+            </div>
+            <div class="form-group">
+              <label for="api-key-nvidia">NVIDIA API Key (nvapi-...):</label>
+              <div class="input-password-wrapper">
+                <input type="password" id="api-key-nvidia" class="form-control" placeholder="nvapi-xxxxxxxxxxxxxxxxxxxxxxxx">
+                <button type="button" class="toggle-password-btn" id="btn-toggle-nvapi"><i class="bx bx-show"></i></button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Gemini configs -->
+          <div id="cfg-gemini-group" class="provider-config-group" style="display: none;">
+            <div class="alert-info-box">
+              <i class="bx bx-info-circle"></i>
+              <p>Ingresa tu clave de Google Gemini 1.5 Flash para realizar peticiones seguras mediante nuestro servidor proxy.</p>
+            </div>
+            <div class="form-group">
+              <label for="api-key-gemini">Gemini API Key (AIzaSy...):</label>
+              <div class="input-password-wrapper">
+                <input type="password" id="api-key-gemini" class="form-control" placeholder="AIzaSyxxxxxxxxxxxxxxxxxxxxxxxx">
+                <button type="button" class="toggle-password-btn" id="btn-toggle-gemini"><i class="bx bx-show"></i></button>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="secondary-btn" id="btn-cancel-settings">Cancelar</button>
+          <button class="primary-btn" id="btn-save-settings">Guardar Cambios</button>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>

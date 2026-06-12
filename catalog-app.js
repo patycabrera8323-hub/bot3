@@ -1,0 +1,332 @@
+/* ==========================================
+   NEXUS AI - CATALOG APP LOGIC (PWA CATALOG)
+   ========================================== */
+
+import { 
+  db, 
+  isFirebaseEnabled, 
+  collection, 
+  addDoc, 
+  onSnapshot, 
+  query 
+} from './firebase-config.js';
+
+// --- INITIAL STATE & DEFAULT PRODUCTS ---
+const DEFAULT_PRODUCTS = [
+  {
+    id: "prod-1",
+    name: "Hamburguesa Double Smash",
+    category: "comida",
+    price: 12.00,
+    img: "https://images.unsplash.com/photo-1568901346375-23c9450c58cd?auto=format&fit=crop&w=500&q=80",
+    desc: "Doble carne premium (120g c/u), queso cheddar derretido, cebolla caramelizada, pepinillos y salsa de la casa."
+  },
+  {
+    id: "prod-2",
+    name: "Pizza Pepperoni Suprema",
+    category: "comida",
+    price: 14.50,
+    img: "https://images.unsplash.com/photo-1628840042765-356cda07504e?auto=format&fit=crop&w=500&q=80",
+    desc: "Masa artesanal delgada con salsa napolitana, mozzarella, pepperoni y orégano."
+  },
+  {
+    id: "prod-3",
+    name: "Papas Fritas Trufa & Queso",
+    category: "comida",
+    price: 6.50,
+    img: "https://images.unsplash.com/photo-1573080496219-bb080dd4f877?auto=format&fit=crop&w=500&q=80",
+    desc: "Papas crujientes con aceite de trufa blanca, parmesano rallado y perejil fresco."
+  },
+  {
+    id: "prod-5",
+    name: "Limonada de Coco & Menta",
+    category: "bebida",
+    price: 3.50,
+    img: "https://images.unsplash.com/photo-1513558161293-cdaf765ed2fd?auto=format&fit=crop&w=500&q=80",
+    desc: "Batido refrescante de limón, crema de coco natural y menta fresca."
+  }
+];
+
+let products = JSON.parse(localStorage.getItem("nexus_products")) || DEFAULT_PRODUCTS;
+let cart = JSON.parse(localStorage.getItem("nexus_cart")) || [];
+
+// --- DOM ELEMENTS REFERENCE ---
+const DOM = {
+  catalogGrid: document.getElementById("catalog-products-grid"),
+  catalogSearch: document.getElementById("catalog-search"),
+  categoriesContainer: document.getElementById("catalog-categories"),
+  cartToggleBtn: document.getElementById("btn-cart-toggle"),
+  cartCounter: document.getElementById("cart-counter"),
+  cartOverlay: document.getElementById("cart-overlay"),
+  cartDrawer: document.getElementById("cart-drawer"),
+  btnCartClose: document.getElementById("btn-cart-close"),
+  cartItemsContainer: document.getElementById("cart-items-container"),
+  cartSubtotal: document.getElementById("cart-subtotal"),
+  cartTotal: document.getElementById("cart-total"),
+  btnCheckout: document.getElementById("btn-checkout-submit"),
+  checkoutName: document.getElementById("checkout-name"),
+  checkoutPhone: document.getElementById("checkout-phone"),
+  checkoutAddress: document.getElementById("checkout-address")
+};
+
+let selectedCategory = "all";
+let searchFilter = "";
+
+// --- INITIALIZATION ---
+document.addEventListener("DOMContentLoaded", () => {
+  initCatalog();
+});
+
+function initCatalog() {
+  updateCartUI();
+  setupEventListeners();
+  loadProducts();
+}
+
+// Load products either from Firebase or localStorage
+function loadProducts() {
+  if (isFirebaseEnabled) {
+    const q = query(collection(db, "productos"));
+    onSnapshot(q, (snapshot) => {
+      const fbProducts = [];
+      snapshot.forEach((doc) => {
+        fbProducts.push({ id: doc.id, ...doc.data() });
+      });
+      if (fbProducts.length > 0) {
+        products = fbProducts;
+        localStorage.setItem("nexus_products", JSON.stringify(products));
+      }
+      renderCatalog();
+    }, (error) => {
+      console.error("Error fetching Firestore products:", error);
+      renderCatalog();
+    });
+  } else {
+    renderCatalog();
+  }
+}
+
+function renderCatalog() {
+  DOM.catalogGrid.innerHTML = "";
+  
+  const filtered = products.filter(p => {
+    const matchesCat = (selectedCategory === "all" || p.category === selectedCategory);
+    const matchesSearch = p.name.toLowerCase().includes(searchFilter.toLowerCase()) || 
+                          (p.desc && p.desc.toLowerCase().includes(searchFilter.toLowerCase()));
+    return matchesCat && matchesSearch;
+  });
+  
+  if (filtered.length === 0) {
+    DOM.catalogGrid.innerHTML = `<div class="no-data-msg">No se encontraron productos.</div>`;
+    return;
+  }
+  
+  filtered.forEach(p => {
+    const imgUrl = p.img || "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&w=300&q=80";
+    const card = document.createElement("div");
+    card.className = "product-card";
+    card.innerHTML = `
+      <div class="product-img-wrapper">
+        <img src="${imgUrl}" alt="${p.name}" class="product-img" onerror="this.src='https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&w=300&q=80'">
+        <span class="product-tag">${p.category}</span>
+      </div>
+      <div class="product-info">
+        <h4 class="product-name">${p.name}</h4>
+        <p class="product-desc">${p.desc || 'Deliciosa opción preparada con ingredientes frescos de primera calidad.'}</p>
+        <div class="product-footer">
+          <span class="product-price">$${p.price.toFixed(2)}</span>
+          <button class="btn-add-cart" data-id="${p.id}" title="Añadir al carrito">
+            <i class="bx bx-plus"></i>
+          </button>
+        </div>
+      </div>
+    `;
+    
+    card.querySelector(".btn-add-cart").addEventListener("click", () => addToCart(p.id));
+    
+    DOM.catalogGrid.appendChild(card);
+  });
+}
+
+function addToCart(productId) {
+  const prod = products.find(p => p.id === productId);
+  if (!prod) return;
+  
+  const existing = cart.find(item => item.id === productId);
+  if (existing) {
+    existing.qty += 1;
+  } else {
+    cart.push({
+      id: prod.id,
+      name: prod.name,
+      price: prod.price,
+      img: prod.img,
+      qty: 1
+    });
+  }
+  
+  localStorage.setItem("nexus_cart", JSON.stringify(cart));
+  updateCartUI();
+  
+  DOM.cartToggleBtn.classList.add("accent-text");
+  setTimeout(() => DOM.cartToggleBtn.classList.remove("accent-text"), 300);
+}
+
+function updateCartUI() {
+  const count = cart.reduce((total, item) => total + item.qty, 0);
+  DOM.cartCounter.innerText = count;
+  renderCartDrawer();
+}
+
+function renderCartDrawer() {
+  DOM.cartItemsContainer.innerHTML = "";
+  
+  if (cart.length === 0) {
+    DOM.cartItemsContainer.innerHTML = `
+      <div class="empty-cart-msg">
+        <i class="bx bx-cart-alt"></i>
+        <p>Tu carrito está vacío</p>
+      </div>
+    `;
+    DOM.cartSubtotal.innerText = "$0.00";
+    DOM.cartTotal.innerText = "$0.00";
+    return;
+  }
+  
+  let subtotal = 0;
+  
+  cart.forEach(item => {
+    subtotal += item.price * item.qty;
+    const imgUrl = item.img || "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&w=300&q=80";
+    
+    const div = document.createElement("div");
+    div.className = "cart-item";
+    div.innerHTML = `
+      <img src="${imgUrl}" alt="${item.name}" class="cart-item-img" onerror="this.src='https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&w=300&q=80'">
+      <div class="cart-item-info">
+        <h4>${item.name}</h4>
+        <p>$${item.price.toFixed(2)} c/u</p>
+      </div>
+      <div class="cart-qty-ctrl">
+        <button class="qty-btn dec-btn" data-id="${item.id}"><i class="bx bx-minus"></i></button>
+        <span class="qty-num">${item.qty}</span>
+        <button class="qty-btn inc-btn" data-id="${item.id}"><i class="bx bx-plus"></i></button>
+      </div>
+    `;
+    
+    div.querySelector(".dec-btn").addEventListener("click", () => changeQty(item.id, -1));
+    div.querySelector(".inc-btn").addEventListener("click", () => changeQty(item.id, 1));
+    
+    DOM.cartItemsContainer.appendChild(div);
+  });
+  
+  DOM.cartSubtotal.innerText = `$${subtotal.toFixed(2)}`;
+  DOM.cartTotal.innerText = `$${subtotal.toFixed(2)}`;
+}
+
+function changeQty(productId, delta) {
+  const item = cart.find(item => item.id === productId);
+  if (!item) return;
+  
+  item.qty += delta;
+  if (item.qty <= 0) {
+    cart = cart.filter(i => i.id !== productId);
+  }
+  
+  localStorage.setItem("nexus_cart", JSON.stringify(cart));
+  updateCartUI();
+}
+
+// --- SUBMIT CHECKOUT & WRITE TO FIREBASE / LOCALSTORAGE ---
+async function submitCheckout() {
+  const name = DOM.checkoutName.value.trim();
+  const phone = DOM.checkoutPhone.value.trim();
+  let address = DOM.checkoutAddress.value.trim() || "Retiro en Local";
+  
+  if (!name || !phone) {
+    alert("Por favor ingresa tu Nombre y Celular/WhatsApp para enviar el pedido.");
+    return;
+  }
+  
+  if (cart.length === 0) {
+    alert("Tu carrito está vacío.");
+    return;
+  }
+  
+  const orderId = "NEX-" + Math.floor(1000 + Math.random() * 9000);
+  const total = cart.reduce((acc, item) => acc + (item.price * item.qty), 0);
+  const orderTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  
+  const orderData = {
+    id: orderId,
+    customer: name,
+    phone: phone,
+    address: address,
+    items: [...cart],
+    total: total,
+    time: orderTime,
+    status: "pendiente"
+  };
+  
+  // 1. Write order to database
+  if (isFirebaseEnabled) {
+    try {
+      await addDoc(collection(db, "pedidos"), orderData);
+      console.log("🔥 Pedido guardado en Firebase Firestore!");
+    } catch (e) {
+      console.error("Error guardando pedido en Firebase:", e);
+      saveOrderToLocalStorageFallback(orderData);
+    }
+  } else {
+    saveOrderToLocalStorageFallback(orderData);
+  }
+  
+  // 2. Serialize items and redirect back to chatbot index.html
+  const encodedItems = encodeURIComponent(JSON.stringify(cart));
+  
+  // Clear cart state
+  cart = [];
+  localStorage.setItem("nexus_cart", JSON.stringify(cart));
+  
+  // Redirect URL building
+  const redirectUrl = `./index.html?orderCreated=true&orderId=${orderId}&name=${encodeURIComponent(name)}&total=${total}&address=${encodeURIComponent(address)}&items=${encodedItems}`;
+  
+  window.location.href = redirectUrl;
+}
+
+function saveOrderToLocalStorageFallback(order) {
+  const localOrders = JSON.parse(localStorage.getItem("nexus_orders")) || [];
+  localOrders.push(order);
+  localStorage.setItem("nexus_orders", JSON.stringify(localOrders));
+}
+
+// --- EVENT LISTENERS SETUP ---
+function setupEventListeners() {
+  DOM.cartToggleBtn.addEventListener("click", () => {
+    DOM.cartDrawer.classList.add("active");
+    DOM.cartOverlay.classList.add("active");
+  });
+  
+  const closeCart = () => {
+    DOM.cartDrawer.classList.remove("active");
+    DOM.cartOverlay.classList.remove("active");
+  };
+  DOM.btnCartClose.addEventListener("click", closeCart);
+  DOM.cartOverlay.addEventListener("click", closeCart);
+  
+  DOM.categoriesContainer.addEventListener("click", (e) => {
+    if (e.target.classList.contains("category-tab")) {
+      DOM.categoriesContainer.querySelectorAll(".category-tab").forEach(t => t.classList.remove("active"));
+      e.target.classList.add("active");
+      selectedCategory = e.target.dataset.category;
+      renderCatalog();
+    }
+  });
+  
+  DOM.catalogSearch.addEventListener("input", (e) => {
+    searchFilter = e.target.value;
+    renderCatalog();
+  });
+  
+  DOM.btnCheckout.addEventListener("click", submitCheckout);
+}
