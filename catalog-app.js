@@ -395,11 +395,13 @@ async function submitCheckout() {
     createdAt: Date.now()
   };
   
+  let firestoreId = "";
   // 1. Write order to 'orders' collection
   if (isFirebaseEnabled) {
     try {
-      await addDoc(collection(db, "orders"), orderData);
-      console.log("🔥 Pedido guardado en Firestore!");
+      const docRef = await addDoc(collection(db, "orders"), orderData);
+      firestoreId = docRef.id;
+      console.log("🔥 Pedido guardado en Firestore con ID:", firestoreId);
     } catch (e) {
       console.error("Error guardando pedido en Firebase:", e);
       saveOrderToLocalStorageFallback(orderData);
@@ -407,6 +409,9 @@ async function submitCheckout() {
   } else {
     saveOrderToLocalStorageFallback(orderData);
   }
+  
+  // Save order to client tracking list in localStorage
+  saveClientOrderTracking(firestoreId || orderId, orderData);
   
   // 2. Serialize items and redirect back to chatbot index.html
   const encodedItems = encodeURIComponent(JSON.stringify(cart));
@@ -425,6 +430,21 @@ function saveOrderToLocalStorageFallback(order) {
   const localOrders = JSON.parse(localStorage.getItem("nexus_orders")) || [];
   localOrders.push(order);
   localStorage.setItem("nexus_orders", JSON.stringify(localOrders));
+}
+
+function saveClientOrderTracking(refId, orderData) {
+  const clientOrders = JSON.parse(localStorage.getItem("nexus_client_orders")) || [];
+  clientOrders.push({
+    firestoreId: refId,
+    id: orderData.id,
+    storeId: orderData.storeId,
+    total: orderData.total,
+    time: orderData.time,
+    items: orderData.items,
+    status: orderData.status,
+    createdAt: orderData.createdAt
+  });
+  localStorage.setItem("nexus_client_orders", JSON.stringify(clientOrders));
 }
 
 // --- EVENT LISTENERS SETUP ---

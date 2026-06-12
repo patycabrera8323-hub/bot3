@@ -33,13 +33,14 @@
         </div>
       </div>
 
-      <!-- Quick Actions (Settings, Install PWA) -->
+      <!-- Quick Actions (Orders History, Install PWA) -->
       <div class="header-actions">
         <button class="action-btn" id="btn-pwa-install" style="display: none;" title="Instalar como App PWA">
           <i class="bx bx-download"></i>
         </button>
-        <button class="action-btn" id="btn-open-settings" title="Configuración de IA (API Keys)">
-          <i class="bx bx-slider"></i>
+        <button class="action-btn" id="btn-open-orders" title="Mis Pedidos y Notificaciones" style="position: relative;">
+          <i class="bx bx-package"></i>
+          <span class="badge-dot" id="orders-badge-dot" style="display: none; position: absolute; top: 2px; right: 2px; width: 8px; height: 8px; background: var(--color-danger); border-radius: 50%;"></span>
         </button>
       </div>
     </header>
@@ -53,7 +54,7 @@
           <h2 style="font-size: 2rem; font-family: var(--font-display); font-weight: 700; color: var(--text-main); text-shadow: 0 0 10px var(--color-primary-glow); margin-bottom: 8px;">Elige un Negocio</h2>
           <p style="color: var(--text-muted); font-size: 0.95rem;">Explora los comercios de la zona y haz tu pedido a través de nuestro chatbot con Inteligencia Artificial.</p>
         </div>
-        <div class="businesses-grid" id="businesses-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 20px;">
+        <div class="businesses-grid" id="businesses-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 25px; justify-content: center; width: 100%;">
           <div class="loading-spinner" style="grid-column: 1/-1; text-align: center; color: var(--text-muted); padding: 40px;">
             <i class="bx bx-loader-alt bx-spin" style="font-size: 2rem; margin-bottom: 10px; display: block; color: var(--color-primary);"></i>
             Cargando comercios disponibles...
@@ -176,6 +177,36 @@
       </div>
     </div>
 
+  </div>
+
+  <!-- CLIENT ORDERS & NOTIFICATIONS DRAWER -->
+  <div class="cart-drawer-overlay" id="orders-overlay"></div>
+  <div class="cart-drawer" id="orders-drawer">
+    <div class="cart-drawer-header">
+      <h2 style="display: flex; align-items: center; gap: 8px; margin: 0; font-size: 1.15rem; color: var(--color-primary); font-family: var(--font-display); font-weight: 700;">
+        <i class="bx bx-package"></i> Mis Pedidos
+      </h2>
+      <button class="close-btn" id="btn-orders-close"><i class="bx bx-x"></i></button>
+    </div>
+    <div class="drawer-body" style="padding: 20px; overflow-y: auto; height: calc(100% - 70px); display: flex; flex-direction: column; gap: 20px;">
+      
+      <!-- A. ACTIVE ORDERS (STATUS NOTIFICATIONS) -->
+      <div id="active-orders-section">
+        <h3 style="font-size: 0.95rem; color: var(--text-main); font-family: var(--font-display); margin-bottom: 15px; border-bottom: 1px solid var(--border-glass); padding-bottom: 8px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;">Pedidos Activos</h3>
+        <div id="active-orders-list" style="display: flex; flex-direction: column; gap: 15px;">
+          <div style="text-align: center; color: var(--text-muted); font-size: 0.82rem; padding: 20px 0;">No tienes pedidos activos.</div>
+        </div>
+      </div>
+
+      <!-- B. ORDER HISTORY -->
+      <div id="history-orders-section">
+        <h3 style="font-size: 0.95rem; color: var(--text-muted); font-family: var(--font-display); margin-bottom: 15px; border-bottom: 1px solid var(--border-glass); padding-bottom: 8px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;">Historial</h3>
+        <div id="history-orders-list" style="display: flex; flex-direction: column; gap: 10px;">
+          <div style="text-align: center; color: var(--text-muted); font-size: 0.82rem; padding: 20px 0;">Historial vacío.</div>
+        </div>
+      </div>
+      
+    </div>
   </div>
 
   <script type="module" src="app.js"></script>

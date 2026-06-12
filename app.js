@@ -53,7 +53,16 @@ const DOM = {
   chatBusinessName: document.getElementById("chat-business-name"),
   chatBusinessSchedule: document.getElementById("chat-business-schedule"),
   welcomeMessageText: document.getElementById("welcome-message-text"),
-  msgBtnCatalog: document.getElementById("msg-btn-catalog")
+  msgBtnCatalog: document.getElementById("msg-btn-catalog"),
+
+  // Orders & Notifications Drawer
+  btnOpenOrders: document.getElementById("btn-open-orders"),
+  ordersOverlay: document.getElementById("orders-overlay"),
+  ordersDrawer: document.getElementById("orders-drawer"),
+  btnOrdersClose: document.getElementById("btn-orders-close"),
+  activeOrdersList: document.getElementById("active-orders-list"),
+  historyOrdersList: document.getElementById("history-orders-list"),
+  ordersBadgeDot: document.getElementById("orders-badge-dot")
 };
 
 // --- INITIALIZATION ---
@@ -65,6 +74,7 @@ function initApp() {
   updateAIModelBadge();
   setupEventListeners();
   syncProductsData();
+  initClientOrderTracking();
   
   // Route check: check URL for active business parameter
   const urlParams = new URLSearchParams(window.location.search);
@@ -216,7 +226,7 @@ function renderBusinessesGrid(list) {
       <div style="display: flex; gap: 15px; align-items: center;">
         <img src="${logoUrl}" alt="${biz.name}" style="width: 55px; height: 55px; object-fit: cover; border-radius: 50%; border: 2px solid var(--color-primary-glow);" onerror="this.src='https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&w=80&q=80'">
         <div style="flex: 1;">
-          <h3 style="margin: 0; font-size: 1.2rem; color: var(--text-main); font-weight: 700; font-family: var(--font-display);">${biz.name}</h3>
+          <h3 style="margin: 0; font-size: 1.25rem; color: var(--text-main); font-weight: 700; font-family: var(--font-display);">${biz.name}</h3>
           <span class="status-badge status-badge-preparing" style="margin-top: 5px; font-size: 0.62rem; display: inline-block; text-transform: uppercase;">${biz.category || 'COMIDA'}</span>
         </div>
       </div>
@@ -225,11 +235,11 @@ function renderBusinessesGrid(list) {
         ${biz.description || 'Disfruta de la mejor calidad y servicio directamente a tu domicilio.'}
       </p>
       
-      <div style="border-top: 1px solid rgba(255, 255, 255, 0.05); padding-top: 12px; font-size: 0.76rem; color: var(--text-muted); display: flex; flex-direction: column; gap: 6px;">
-        <div style="display:flex; align-items:center; gap:6px;"><i class="bx bx-time" style="color: var(--color-primary); font-size: 0.95rem;"></i> <span><strong>Horario:</strong> ${biz.schedule || 'Mar - Dom, 12:00 a 23:00'}</span></div>
-        <div style="display:flex; align-items:center; gap:6px;"><i class="bx bx-map" style="color: var(--color-primary); font-size: 0.95rem;"></i> <span><strong>Ubicación:</strong> ${biz.address || 'Ubicación céntrica'}</span></div>
-        <div style="display:flex; align-items:center; gap:6px;"><i class="bx bx-credit-card" style="color: var(--color-primary); font-size: 0.95rem;"></i> <span><strong>Pagos:</strong> ${biz.paymentMethod || 'Efectivo, Tarjeta'}</span></div>
-        <div style="display:flex; align-items:center; gap:6px;"><i class="bx bx-cycling" style="color: var(--color-primary); font-size: 0.95rem;"></i> <span><strong>Min. Delivery:</strong> $${parseFloat(biz.minDeliveryAmount || 0).toFixed(2)}</span></div>
+      <div style="border-top: 1px solid rgba(255, 255, 255, 0.05); padding-top: 14px; font-size: 0.74rem; color: var(--text-muted); display: grid; grid-template-columns: 1fr 1fr; gap: 10px 15px;">
+        <div style="display:flex; align-items:center; gap:6px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;"><i class="bx bx-time" style="color: var(--color-primary); font-size: 0.95rem; flex-shrink:0;"></i> <span title="${biz.schedule || 'Mar - Dom, 12:00 a 23:00'}"><strong>Horario:</strong> ${biz.schedule || 'Mar - Dom, 12:00 a 23:00'}</span></div>
+        <div style="display:flex; align-items:center; gap:6px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;"><i class="bx bx-map" style="color: var(--color-primary); font-size: 0.95rem; flex-shrink:0;"></i> <span title="${biz.address || 'Ubicación céntrica'}"><strong>Ubicación:</strong> ${biz.address || 'Ubicación céntrica'}</span></div>
+        <div style="display:flex; align-items:center; gap:6px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;"><i class="bx bx-credit-card" style="color: var(--color-primary); font-size: 0.95rem; flex-shrink:0;"></i> <span title="${biz.paymentMethod || 'Efectivo, Tarjeta'}"><strong>Pagos:</strong> ${biz.paymentMethod || 'Efectivo, Tarjeta'}</span></div>
+        <div style="display:flex; align-items:center; gap:6px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;"><i class="bx bx-cycling" style="color: var(--color-primary); font-size: 0.95rem; flex-shrink:0;"></i> <span><strong>Envío Mín:</strong> $${parseFloat(biz.minDeliveryAmount || 0).toFixed(2)}</span></div>
       </div>
       
       <button class="primary-btn btn-enter-biz" style="width: 100%; margin-top: auto; display: flex; align-items: center; justify-content: center; gap: 8px;">
@@ -433,54 +443,86 @@ function setupEventListeners() {
     `;
   });
   
-  // Settings Modal actions
-  DOM.btnOpenSettings.addEventListener("click", () => {
-    DOM.aiProviderSelect.value = config.provider;
-    DOM.apiKeyNvidia.value = config.nvidiaKey || "";
-    DOM.apiKeyGemini.value = config.geminiKey || "";
-    toggleProviderFields(config.provider);
-    DOM.modalSettings.classList.add("active");
-  });
+  // Settings Modal actions (wrapped in null safety checks)
+  if (DOM.btnOpenSettings) {
+    DOM.btnOpenSettings.addEventListener("click", () => {
+      DOM.aiProviderSelect.value = config.provider;
+      DOM.apiKeyNvidia.value = config.nvidiaKey || "";
+      DOM.apiKeyGemini.value = config.geminiKey || "";
+      toggleProviderFields(config.provider);
+      DOM.modalSettings.classList.add("active");
+    });
+  }
   
-  const closeSettings = () => DOM.modalSettings.classList.remove("active");
-  DOM.btnCloseSettings.addEventListener("click", closeSettings);
-  DOM.btnCancelSettings.addEventListener("click", closeSettings);
+  const closeSettings = () => {
+    if (DOM.modalSettings) DOM.modalSettings.classList.remove("active");
+  };
   
-  DOM.aiProviderSelect.addEventListener("change", (e) => {
-    toggleProviderFields(e.target.value);
-  });
+  if (DOM.btnCloseSettings) DOM.btnCloseSettings.addEventListener("click", closeSettings);
+  if (DOM.btnCancelSettings) DOM.btnCancelSettings.addEventListener("click", closeSettings);
   
-  DOM.btnSaveSettings.addEventListener("click", () => {
-    config.provider = DOM.aiProviderSelect.value;
-    config.nvidiaKey = DOM.apiKeyNvidia.value.trim();
-    config.geminiKey = DOM.apiKeyGemini.value.trim();
-    
-    localStorage.setItem("nexus_config", JSON.stringify(config));
-    updateAIModelBadge();
-    closeSettings();
-    
-    appendChatMessage("bot", `Configuración guardada. Ahora utilizo el cerebro de **${config.provider === 'nvidia' ? 'NVIDIA Nemotron (Proxy)' : config.provider === 'gemini' ? 'Google Gemini (Proxy)' : 'Demo Local'}**.`);
-  });
+  if (DOM.aiProviderSelect) {
+    DOM.aiProviderSelect.addEventListener("change", (e) => {
+      toggleProviderFields(e.target.value);
+    });
+  }
   
-  DOM.btnToggleGemini.addEventListener("click", () => {
-    if (DOM.apiKeyGemini.type === "password") {
-      DOM.apiKeyGemini.type = "text";
-      DOM.btnToggleGemini.innerHTML = `<i class="bx bx-hide"></i>`;
-    } else {
-      DOM.apiKeyGemini.type = "password";
-      DOM.btnToggleGemini.innerHTML = `<i class="bx bx-show"></i>`;
-    }
-  });
+  if (DOM.btnSaveSettings) {
+    DOM.btnSaveSettings.addEventListener("click", () => {
+      config.provider = DOM.aiProviderSelect.value;
+      config.nvidiaKey = DOM.apiKeyNvidia.value.trim();
+      config.geminiKey = DOM.apiKeyGemini.value.trim();
+      
+      localStorage.setItem("nexus_config", JSON.stringify(config));
+      updateAIModelBadge();
+      closeSettings();
+      
+      appendChatMessage("bot", `Configuración guardada. Ahora utilizo el cerebro de **${config.provider === 'nvidia' ? 'NVIDIA Nemotron (Proxy)' : config.provider === 'gemini' ? 'Google Gemini (Proxy)' : 'Demo Local'}**.`);
+    });
+  }
+  
+  if (DOM.btnToggleGemini) {
+    DOM.btnToggleGemini.addEventListener("click", () => {
+      if (DOM.apiKeyGemini.type === "password") {
+        DOM.apiKeyGemini.type = "text";
+        DOM.btnToggleGemini.innerHTML = `<i class="bx bx-hide"></i>`;
+      } else {
+        DOM.apiKeyGemini.type = "password";
+        DOM.btnToggleGemini.innerHTML = `<i class="bx bx-show"></i>`;
+      }
+    });
+  }
 
-  DOM.btnToggleNvapi.addEventListener("click", () => {
-    if (DOM.apiKeyNvidia.type === "password") {
-      DOM.apiKeyNvidia.type = "text";
-      DOM.btnToggleNvapi.innerHTML = `<i class="bx bx-hide"></i>`;
-    } else {
-      DOM.apiKeyNvidia.type = "password";
-      DOM.btnToggleNvapi.innerHTML = `<i class="bx bx-show"></i>`;
-    }
-  });
+  if (DOM.btnToggleNvapi) {
+    DOM.btnToggleNvapi.addEventListener("click", () => {
+      if (DOM.apiKeyNvidia.type === "password") {
+        DOM.apiKeyNvidia.type = "text";
+        DOM.btnToggleNvapi.innerHTML = `<i class="bx bx-hide"></i>`;
+      } else {
+        DOM.apiKeyNvidia.type = "password";
+        DOM.btnToggleNvapi.innerHTML = `<i class="bx bx-show"></i>`;
+      }
+    });
+  }
+
+  // Client Orders Drawer actions
+  if (DOM.btnOpenOrders) {
+    DOM.btnOpenOrders.addEventListener("click", () => {
+      DOM.ordersDrawer.classList.add("active");
+      DOM.ordersOverlay.classList.add("active");
+      if (DOM.ordersBadgeDot) DOM.ordersBadgeDot.style.display = "none";
+      renderClientOrders();
+    });
+  }
+  
+  if (DOM.btnOrdersClose) {
+    const closeOrders = () => {
+      DOM.ordersDrawer.classList.remove("active");
+      DOM.ordersOverlay.classList.remove("active");
+    };
+    DOM.btnOrdersClose.addEventListener("click", closeOrders);
+    DOM.ordersOverlay.addEventListener("click", closeOrders);
+  }
 }
 
 function toggleProviderFields(provider) {
@@ -676,4 +718,170 @@ if ('serviceWorker' in navigator) {
       .then(reg => console.log('Service Worker registrado:', reg.scope))
       .catch(err => console.log('Error de Service Worker:', err));
   });
+}
+
+// ============================================================
+// CLIENT SIDE ORDER TRACKING & STATUS NOTIFICATIONS
+// ============================================================
+let activeListeners = {};
+
+function initClientOrderTracking() {
+  const clientOrders = JSON.parse(localStorage.getItem("nexus_client_orders")) || [];
+  
+  clientOrders.forEach(order => {
+    // Listen to active/non-completed orders in real-time
+    if (order.status !== "completed" && order.firestoreId && isFirebaseEnabled && !activeListeners[order.firestoreId]) {
+      try {
+        const orderRef = doc(db, "orders", order.firestoreId);
+        const unsub = onSnapshot(orderRef, (docSnap) => {
+          if (docSnap.exists()) {
+            const serverData = docSnap.data();
+            const oldStatus = order.status;
+            const newStatus = serverData.status || "pendiente";
+            
+            if (oldStatus !== newStatus) {
+              order.status = newStatus;
+              updateLocalOrderCachedStatus(order.firestoreId, newStatus);
+              
+              // Show notification badge dot
+              if (DOM.ordersBadgeDot) {
+                DOM.ordersBadgeDot.style.display = "block";
+              }
+              
+              // Play chime
+              playNotificationSound();
+              
+              // Re-render if drawer is open
+              if (DOM.ordersDrawer && DOM.ordersDrawer.classList.contains("active")) {
+                renderClientOrders();
+              }
+            }
+          }
+        }, (err) => {
+          console.error("Firestore client order tracking snapshot error:", err);
+        });
+        activeListeners[order.firestoreId] = unsub;
+      } catch (err) {
+        console.error("Error setting up client order listener:", err);
+      }
+    }
+  });
+}
+
+function updateLocalOrderCachedStatus(firestoreId, newStatus) {
+  const clientOrders = JSON.parse(localStorage.getItem("nexus_client_orders")) || [];
+  const idx = clientOrders.findIndex(o => o.firestoreId === firestoreId);
+  if (idx !== -1) {
+    clientOrders[idx].status = newStatus;
+    localStorage.setItem("nexus_client_orders", JSON.stringify(clientOrders));
+  }
+}
+
+function renderClientOrders() {
+  if (!DOM.activeOrdersList || !DOM.historyOrdersList) return;
+  
+  const clientOrders = JSON.parse(localStorage.getItem("nexus_client_orders")) || [];
+  
+  // Sort descending by creation date
+  const sorted = [...clientOrders].sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+  
+  const activeOrders = sorted.filter(o => o.status !== "completed");
+  const historyOrders = sorted.filter(o => o.status === "completed");
+  
+  // Render active orders
+  DOM.activeOrdersList.innerHTML = "";
+  if (activeOrders.length === 0) {
+    DOM.activeOrdersList.innerHTML = `<div style="text-align: center; color: var(--text-muted); font-size: 0.82rem; padding: 20px 0;">No tienes pedidos activos.</div>`;
+  } else {
+    activeOrders.forEach(o => {
+      const card = document.createElement("div");
+      card.className = "card glass-card";
+      card.style.padding = "15px";
+      card.style.display = "flex";
+      card.style.flexDirection = "column";
+      card.style.gap = "12px";
+      card.style.border = "1px solid var(--border-glass)";
+      card.style.borderRadius = "var(--border-radius-md)";
+      card.style.background = "rgba(108, 92, 231, 0.03)";
+      
+      const itemsText = (o.items || []).map(i => `${i.qty}x ${i.name}`).join(", ");
+      
+      let step1 = "active", step2 = "", step3 = "";
+      if (o.status === "preparando") {
+        step2 = "active";
+      } else if (o.status === "transit") {
+        step2 = "active";
+        step3 = "active";
+      }
+      
+      card.innerHTML = `
+        <div style="display: flex; justify-content: space-between; align-items: center; gap: 8px;">
+          <h4 style="margin: 0; font-size: 0.88rem; color: var(--text-main); font-weight: 700;">Pedido #${(o.id || "").replace("NEX-", "")}</h4>
+          <span style="font-family: var(--font-mono); font-weight: 700; color: var(--color-success); font-size: 0.88rem;">$${parseFloat(o.total || 0).toFixed(2)}</span>
+        </div>
+        <p style="margin: 0; font-size: 0.76rem; color: var(--text-secondary); line-height: 1.3;">${itemsText}</p>
+        
+        <!-- Progress Stepper Tracker -->
+        <div class="stepper-tracker" style="display: flex; justify-content: space-between; align-items: center; margin-top: 10px; position: relative;">
+          <div style="position: absolute; top: 12px; left: 10%; right: 10%; height: 2px; background: rgba(255, 255, 255, 0.08); z-index: 1;">
+            <div style="width: ${o.status === 'preparando' ? '50%' : o.status === 'transit' ? '100%' : '0%'}; height: 100%; background: var(--color-primary); transition: width 0.3s ease;"></div>
+          </div>
+          
+          <div style="display: flex; flex-direction: column; align-items: center; gap: 5px; z-index: 2; flex: 1;">
+            <div style="width: 26px; height: 26px; border-radius: 50%; background: ${step1 ? 'var(--color-primary)' : 'rgba(255,255,255,0.05)'}; color: ${step1 ? '#fff' : 'var(--text-muted)'}; display: flex; align-items: center; justify-content: center; font-size: 0.85rem; border: 2px solid ${step1 ? 'var(--color-primary-glow)' : 'var(--border-glass)'};">
+              <i class="bx bx-receipt"></i>
+            </div>
+            <span style="font-size: 0.62rem; color: ${step1 ? 'var(--color-primary)' : 'var(--text-muted)'}; font-weight: 600;">Recibido</span>
+          </div>
+          
+          <div style="display: flex; flex-direction: column; align-items: center; gap: 5px; z-index: 2; flex: 1;">
+            <div style="width: 26px; height: 26px; border-radius: 50%; background: ${step2 ? 'var(--color-primary)' : 'rgba(255,255,255,0.05)'}; color: ${step2 ? '#fff' : 'var(--text-muted)'}; display: flex; align-items: center; justify-content: center; font-size: 0.85rem; border: 2px solid ${step2 ? 'var(--color-primary-glow)' : 'var(--border-glass)'};">
+              <i class="bx bx-bowl-rice"></i>
+            </div>
+            <span style="font-size: 0.62rem; color: ${step2 ? 'var(--color-primary)' : 'var(--text-muted)'}; font-weight: 600;">Preparando</span>
+          </div>
+          
+          <div style="display: flex; flex-direction: column; align-items: center; gap: 5px; z-index: 2; flex: 1;">
+            <div style="width: 26px; height: 26px; border-radius: 50%; background: ${step3 ? 'var(--color-primary)' : 'rgba(255,255,255,0.05)'}; color: ${step3 ? '#fff' : 'var(--text-muted)'}; display: flex; align-items: center; justify-content: center; font-size: 0.85rem; border: 2px solid ${step3 ? 'var(--color-primary-glow)' : 'var(--border-glass)'};">
+              <i class="bx bx-cycling"></i>
+            </div>
+            <span style="font-size: 0.62rem; color: ${step3 ? 'var(--color-primary)' : 'var(--text-muted)'}; font-weight: 600;">En Camino</span>
+          </div>
+        </div>
+      `;
+      DOM.activeOrdersList.appendChild(card);
+    });
+  }
+  
+  // Render history
+  DOM.historyOrdersList.innerHTML = "";
+  if (historyOrders.length === 0) {
+    DOM.historyOrdersList.innerHTML = `<div style="text-align: center; color: var(--text-muted); font-size: 0.82rem; padding: 20px 0;">Historial vacío.</div>`;
+  } else {
+    historyOrders.forEach(o => {
+      const card = document.createElement("div");
+      card.style.display = "flex";
+      card.style.justifyContent = "space-between";
+      card.style.alignItems = "center";
+      card.style.gap = "10px";
+      card.style.padding = "10px 12px";
+      card.style.background = "rgba(255, 255, 255, 0.01)";
+      card.style.border = "1px solid rgba(255, 255, 255, 0.03)";
+      card.style.borderRadius = "var(--border-radius-sm)";
+      
+      const dateText = new Date(o.createdAt || Date.now()).toLocaleDateString([], { month: 'short', day: 'numeric' });
+      
+      card.innerHTML = `
+        <div style="display: flex; flex-direction: column; gap: 3px;">
+          <h4 style="margin: 0; font-size: 0.8rem; color: var(--text-main); font-weight: 600;">Pedido #${(o.id || "").replace("NEX-", "")}</h4>
+          <span style="font-size: 0.68rem; color: var(--text-muted);">${dateText} - ${o.time}</span>
+        </div>
+        <div style="text-align: right;">
+          <span style="font-family: var(--font-mono); font-weight: 700; color: var(--text-main); font-size: 0.82rem; display: block;">$${parseFloat(o.total || 0).toFixed(2)}</span>
+          <span style="font-size: 0.62rem; color: var(--color-success); font-weight: 700;"><i class="bx bx-check-circle"></i> Entregado</span>
+        </div>
+      `;
+      DOM.historyOrdersList.appendChild(card);
+    });
+  }
 }
