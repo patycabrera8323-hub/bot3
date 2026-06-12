@@ -62,12 +62,16 @@ const DOM = {
   formLogin: document.getElementById("form-login"),
   formRegister: document.getElementById("form-register"),
   loginEmail: document.getElementById("login-email"),
+  loginPassword: document.getElementById("login-password"),
   loginErrorMsg: document.getElementById("login-error-msg"),
+  btnToggleLoginPass: document.getElementById("btn-toggle-login-pass"),
   tabBtnLogin: document.getElementById("tab-btn-login"),
   tabBtnRegister: document.getElementById("tab-btn-register"),
   regOwnerName: document.getElementById("reg-owner-name"),
   regOwnerEmail: document.getElementById("reg-owner-email"),
   regOwnerPhone: document.getElementById("reg-owner-phone"),
+  regOwnerPassword: document.getElementById("reg-owner-password"),
+  btnToggleRegPass: document.getElementById("btn-toggle-reg-pass"),
   regBizName: document.getElementById("reg-biz-name"),
   regBizDesc: document.getElementById("reg-biz-desc"),
   regBizSchedule: document.getElementById("reg-biz-schedule"),
@@ -130,13 +134,40 @@ function setupLoginAndRegisterHandlers() {
     DOM.registerErrorMsg.style.display = "none";
   });
 
+  // Toggle password visibility for login form
+  if (DOM.btnToggleLoginPass) {
+    DOM.btnToggleLoginPass.addEventListener("click", () => {
+      if (DOM.loginPassword.type === "password") {
+        DOM.loginPassword.type = "text";
+        DOM.btnToggleLoginPass.innerHTML = `<i class="bx bx-hide"></i>`;
+      } else {
+        DOM.loginPassword.type = "password";
+        DOM.btnToggleLoginPass.innerHTML = `<i class="bx bx-show"></i>`;
+      }
+    });
+  }
+
+  // Toggle password visibility for registration form
+  if (DOM.btnToggleRegPass) {
+    DOM.btnToggleRegPass.addEventListener("click", () => {
+      if (DOM.regOwnerPassword.type === "password") {
+        DOM.regOwnerPassword.type = "text";
+        DOM.btnToggleRegPass.innerHTML = `<i class="bx bx-hide"></i>`;
+      } else {
+        DOM.regOwnerPassword.type = "password";
+        DOM.btnToggleRegPass.innerHTML = `<i class="bx bx-show"></i>`;
+      }
+    });
+  }
+
   // Login form submit
   DOM.formLogin.addEventListener("submit", async (e) => {
     e.preventDefault();
     const email = DOM.loginEmail.value.trim().toLowerCase();
+    const passwordInput = DOM.loginPassword.value.trim();
     DOM.loginErrorMsg.style.display = "none";
 
-    if (!email) return;
+    if (!email || !passwordInput) return;
 
     if (isFirebaseEnabled) {
       try {
@@ -149,12 +180,17 @@ function setupLoginAndRegisterHandlers() {
         }
 
         let isAuthorized = false;
+        let correctPassword = false;
         querySnapshot.forEach((docSnap) => {
           const u = docSnap.data();
           if (u.role === "admin" || u.role === "owner") {
-            isAuthorized = true;
-            userRole = u.role;
-            allowedRestaurantId = u.restaurantId || "all";
+            // Check password (allows empty password check for pre-existing seed users)
+            if (!u.password || u.password === passwordInput) {
+              isAuthorized = true;
+              correctPassword = true;
+              userRole = u.role;
+              allowedRestaurantId = u.restaurantId || "all";
+            }
           }
         });
 
@@ -162,7 +198,11 @@ function setupLoginAndRegisterHandlers() {
           DOM.modalLogin.classList.remove("active");
           startAdminConsole();
         } else {
-          showLoginError("Acceso denegado. Este correo no tiene rol de administrador.");
+          if (!correctPassword) {
+            showLoginError("Contraseña incorrecta. Inténtalo de nuevo.");
+          } else {
+            showLoginError("Acceso denegado. Este correo no tiene rol de administrador.");
+          }
         }
       } catch (err) {
         console.error("Firebase Auth Error:", err);
@@ -170,18 +210,28 @@ function setupLoginAndRegisterHandlers() {
       }
     } else {
       // Local fallback
-      if (email === "searmoco@gmail.com") {
+      if (email === "searmoco@gmail.com" && passwordInput === "admin123") {
         userRole = "admin";
         allowedRestaurantId = "all";
         DOM.modalLogin.classList.remove("active");
         startAdminConsole();
-      } else if (email === "jicr1200@gmail.com") {
+      } else if (email === "jicr1200@gmail.com" && passwordInput === "owner123") {
         userRole = "owner";
         allowedRestaurantId = "burger-shack";
         DOM.modalLogin.classList.remove("active");
         startAdminConsole();
       } else {
-        showLoginError("Acceso denegado. En modo local prueba con 'searmoco@gmail.com' o 'jicr1200@gmail.com'.");
+        // Check localStorage users
+        const localUsers = JSON.parse(localStorage.getItem("nexus_local_users")) || [];
+        const found = localUsers.find(u => u.email === email);
+        if (found && found.password === passwordInput) {
+          userRole = found.role;
+          allowedRestaurantId = found.restaurantId || "all";
+          DOM.modalLogin.classList.remove("active");
+          startAdminConsole();
+        } else {
+          showLoginError("Acceso denegado. Contraseña incorrecta o correo no registrado localmente.");
+        }
       }
     }
   });
@@ -194,6 +244,7 @@ function setupLoginAndRegisterHandlers() {
     const ownerName = DOM.regOwnerName.value.trim();
     const ownerEmail = DOM.regOwnerEmail.value.trim().toLowerCase();
     const ownerPhone = DOM.regOwnerPhone.value.trim();
+    const ownerPassword = DOM.regOwnerPassword.value.trim();
     const bizName = DOM.regBizName.value.trim();
     const bizDesc = DOM.regBizDesc.value.trim();
     const bizSchedule = DOM.regBizSchedule.value.trim();
@@ -204,7 +255,7 @@ function setupLoginAndRegisterHandlers() {
     const payCheckboxes = document.querySelectorAll("input[name='reg-pay-method']:checked");
     const paymentMethod = Array.from(payCheckboxes).map(c => c.value).join(", ") || "Efectivo";
 
-    if (!ownerName || !ownerEmail || !bizName || !bizDesc || !bizSchedule || !bizAddress) {
+    if (!ownerName || !ownerEmail || !ownerPassword || !bizName || !bizDesc || !bizSchedule || !bizAddress) {
       showRegisterError("Por favor completa todos los campos obligatorios.");
       return;
     }
@@ -233,6 +284,7 @@ function setupLoginAndRegisterHandlers() {
       name: ownerName,
       email: ownerEmail,
       phone: ownerPhone,
+      password: ownerPassword,
       role: "owner",
       restaurantId: bizId,
       createdAt: Date.now()
@@ -279,6 +331,10 @@ function setupLoginAndRegisterHandlers() {
       }
       allBiz[bizId] = businessData;
       localStorage.setItem("nexus_businesses", JSON.stringify(allBiz));
+
+      const localUsers = JSON.parse(localStorage.getItem("nexus_local_users")) || [];
+      localUsers.push(userData);
+      localStorage.setItem("nexus_local_users", JSON.stringify(localUsers));
 
       userRole = "owner";
       allowedRestaurantId = bizId;

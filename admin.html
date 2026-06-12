@@ -262,7 +262,7 @@
 
     <!-- LOGIN MODAL (Role verification & Self-Registration) -->
     <div class="modal-overlay active" id="modal-login" style="background: rgba(11, 15, 25, 0.95); backdrop-filter: blur(8px); overflow-y: auto;">
-      <div class="card glass-card modal-card animate-slide-up" style="max-width: 480px; text-align: center; padding: 25px 30px; margin: 30px auto;">
+      <div class="card glass-card modal-card animate-slide-up" style="max-width: 480px; text-align: center; padding: 25px 30px; margin: 30px auto; max-height: none;">
         <div style="margin-bottom: 15px;">
           <i class="bx bx-store-alt" style="font-size: 3.2rem; color: var(--color-primary); text-shadow: 0 0 10px var(--color-primary-glow);"></i>
           <h2 style="margin-top: 8px; font-size: 1.5rem;" id="login-modal-title">Portal de Negocios</h2>
@@ -280,6 +280,13 @@
           <div class="form-group" style="text-align: left;">
             <label for="login-email">Correo Electrónico *</label>
             <input type="email" id="login-email" class="form-control" placeholder="nombre@correo.com" required>
+          </div>
+          <div class="form-group" style="text-align: left; margin-top: 15px;">
+            <label for="login-password">Contraseña *</label>
+            <div class="input-password-wrapper">
+              <input type="password" id="login-password" class="form-control" placeholder="••••••••" required>
+              <button type="button" class="toggle-password-btn" id="btn-toggle-login-pass"><i class="bx bx-show"></i></button>
+            </div>
           </div>
           <div id="login-error-msg" style="color: var(--color-danger); font-size: 0.8rem; margin: 10px 0; text-align: left; display: none;"></div>
           <button type="submit" class="primary-btn" style="width: 100%; margin-top: 15px; display: flex; justify-content: center; align-items: center; gap: 8px;">
@@ -302,6 +309,14 @@
             <div class="form-group">
               <label for="reg-owner-phone">Teléfono / WhatsApp *</label>
               <input type="text" id="reg-owner-phone" class="form-control" placeholder="Ej. +54 9 11 1234 5678" required>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label for="reg-owner-password">Contraseña del Administrador *</label>
+            <div class="input-password-wrapper">
+              <input type="password" id="reg-owner-password" class="form-control" placeholder="Crea tu contraseña segura" required>
+              <button type="button" class="toggle-password-btn" id="btn-toggle-reg-pass"><i class="bx bx-show"></i></button>
             </div>
           </div>
 
