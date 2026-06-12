@@ -296,7 +296,7 @@ async function submitCheckout() {
   localStorage.setItem("nexus_cart", JSON.stringify(cart));
   
   // Redirect URL building
-  const redirectUrl = `./index.html?orderCreated=true&orderId=${orderId}&name=${encodeURIComponent(name)}&total=${total}&address=${encodeURIComponent(address)}&items=${encodedItems}&restaurante=${currentRestaurantId}`;
+  const redirectUrl = `./?orderCreated=true&orderId=${orderId}&name=${encodeURIComponent(name)}&total=${total}&address=${encodeURIComponent(address)}&items=${encodedItems}&restaurante=${currentRestaurantId}`;
   
   window.location.href = redirectUrl;
 }
