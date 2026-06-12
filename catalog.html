@@ -47,10 +47,21 @@
     <!-- CONTENT VIEWS (CATALOG GRID ONLY) -->
     <main class="app-content catalog-standalone-content">
       <div class="card glass-card catalog-card" style="height: 100%;">
+        
         <div class="catalog-header">
           <div class="search-bar">
             <i class="bx bx-search search-icon"></i>
             <input type="text" id="catalog-search" placeholder="Buscar productos...">
+          </div>
+        </div>
+
+        <!-- Promociones Grid (Hidden by default) -->
+        <div id="promos-container" style="display: none; margin: 0 15px 20px 15px; padding: 15px; background: rgba(255, 255, 255, 0.02); border: 1px solid var(--border-glass); border-radius: var(--border-radius-md);">
+          <h3 style="font-size: 1.05rem; color: var(--color-primary); margin-bottom: 12px; display: flex; align-items: center; gap: 8px; font-family: var(--font-display); font-weight: 700;">
+            <i class="bx bx-gift"></i> Promociones Especiales
+          </h3>
+          <div class="promos-slider" id="promos-slider" style="display: flex; gap: 14px; overflow-x: auto; padding-bottom: 8px; scrollbar-width: thin;">
+            <!-- Rendered dynamically -->
           </div>
         </div>
 
@@ -108,6 +119,8 @@
           <input type="text" id="checkout-phone" placeholder="Celular / WhatsApp *" required>
           <input type="text" id="checkout-address" placeholder="Dirección de entrega * (o 'Retiro en Local')">
         </div>
+
+        <div id="min-delivery-warning" style="display: none; color: var(--color-danger); font-size: 0.8rem; font-weight: 700; margin: 8px 0; text-align: center; background: rgba(235, 94, 85, 0.1); border: 1px solid rgba(235, 94, 85, 0.2); border-radius: 4px; padding: 6px;"></div>
 
         <button class="primary-btn checkout-btn" id="btn-checkout-submit">
           <i class="bx bx-check-double"></i> Confirmar Pedido y Enviar al Bot

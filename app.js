@@ -2,7 +2,7 @@
    NEXUS AI - CLIENT CHATBOT INTERACTIVE SCRIPT
    ========================================== */
 
-import { db, isFirebaseEnabled, collection, onSnapshot, query, getDocs } from './firebase-config.js';
+import { db, isFirebaseEnabled, collection, onSnapshot, query, getDocs, doc } from './firebase-config.js';
 
 // --- INITIAL STATE & CONFIG ---
 const DEFAULT_PRODUCTS = [
@@ -18,6 +18,9 @@ let config = JSON.parse(localStorage.getItem("nexus_config")) || {
   nvidiaKey: "",
   geminiKey: ""
 };
+
+let currentRestaurantId = "";
+let activeBusiness = null;
 
 // --- DOM ELEMENTS REFERENCE ---
 const DOM = {
@@ -38,7 +41,19 @@ const DOM = {
   apiKeyNvidia: document.getElementById("api-key-nvidia"),
   btnToggleNvapi: document.getElementById("btn-toggle-nvapi"),
   apiKeyGemini: document.getElementById("api-key-gemini"),
-  btnToggleGemini: document.getElementById("btn-toggle-gemini")
+  btnToggleGemini: document.getElementById("btn-toggle-gemini"),
+
+  // Views & Directory DOM
+  directoryView: document.getElementById("directory-view"),
+  chatbotView: document.getElementById("chatbot-view"),
+  businessesGrid: document.getElementById("businesses-grid"),
+  btnBackToDirectory: document.getElementById("btn-back-to-directory"),
+  chatBotLogo: document.getElementById("chat-bot-logo"),
+  chatBotDefaultIcon: document.getElementById("chat-bot-default-icon"),
+  chatBusinessName: document.getElementById("chat-business-name"),
+  chatBusinessSchedule: document.getElementById("chat-business-schedule"),
+  welcomeMessageText: document.getElementById("welcome-message-text"),
+  msgBtnCatalog: document.getElementById("msg-btn-catalog")
 };
 
 // --- INITIALIZATION ---
@@ -50,7 +65,195 @@ function initApp() {
   updateAIModelBadge();
   setupEventListeners();
   syncProductsData();
+  
+  // Route check: check URL for active business parameter
+  const urlParams = new URLSearchParams(window.location.search);
+  const restId = urlParams.get("restaurante");
+  
+  if (restId) {
+    currentRestaurantId = restId;
+    loadActiveBusinessAndStartChat(restId);
+  } else {
+    showBusinessesDirectory();
+  }
+  
   checkIncomingOrderRedirects();
+}
+
+async function loadActiveBusinessAndStartChat(restId) {
+  DOM.directoryView.style.display = "none";
+  DOM.chatbotView.style.display = "block";
+  
+  if (isFirebaseEnabled) {
+    try {
+      const docRef = doc(db, "businesses", restId);
+      onSnapshot(docRef, (docSnap) => {
+        if (docSnap.exists()) {
+          activeBusiness = { id: docSnap.id, ...docSnap.data() };
+          updateChatHeaderWithBusiness(activeBusiness);
+        } else {
+          console.error("Negocio no encontrado:", restId);
+          goBackToDirectory();
+        }
+      });
+    } catch (err) {
+      console.error("Error cargando negocio:", err);
+      goBackToDirectory();
+    }
+  } else {
+    // Local mock fallback
+    const mockRestaurants = {
+      "burger-shack": { name: "Burger Shack", schedule: "Mar - Dom, 12:00 a 23:00", description: "Las mejores hamburguesas gourmet smash y papas fritas trufadas.", phone: "+54 9 11 1234 5678", address: "Av. Gourmet 123", paymentMethod: "Efectivo, Tarjeta", minDeliveryAmount: "10.00" },
+      "pizza-napolitana": { name: "Pizza Napolitana", schedule: "Mar - Dom, 12:00 a 23:00", description: "Pizzas artesanales cocinadas al horno de leña al estilo napolitano.", phone: "+54 9 11 8765 4321", address: "Vía Italia 456", paymentMethod: "Efectivo, Transferencia", minDeliveryAmount: "12.00" },
+      "sushi-zen": { name: "Sushi Zen", schedule: "Mié - Lun, 13:00 a 23:30", description: "Rolls de sushi premium, sashimi fresco y platos calientes japoneses.", phone: "+54 9 11 5555 9999", address: "Calle Kioto 789", paymentMethod: "Tarjeta, Transferencia", minDeliveryAmount: "15.00" }
+    };
+    const data = mockRestaurants[restId] || { name: restId, schedule: "Mar - Dom, 12:00 a 23:00", description: "Comercio de comida variada", phone: "+54 9 11 1111 2222", address: "Calle Ficticia 123", paymentMethod: "Efectivo", minDeliveryAmount: "0.00" };
+    activeBusiness = { id: restId, ...data };
+    updateChatHeaderWithBusiness(activeBusiness);
+  }
+}
+
+function updateChatHeaderWithBusiness(biz) {
+  DOM.chatBusinessName.innerText = biz.name;
+  DOM.chatBusinessSchedule.innerText = biz.schedule || "Catálogo Digital PWA";
+  DOM.welcomeMessageText.innerHTML = `¡Hola! 👋 Bienvenido a <strong>${biz.name}</strong>. Soy tu asistente virtual con Inteligencia Artificial.`;
+  DOM.msgBtnCatalog.href = `./catalog.html?restaurante=${biz.id}`;
+  
+  if (biz.logoUrl) {
+    DOM.chatBotLogo.src = biz.logoUrl;
+    DOM.chatBotLogo.style.display = "block";
+    DOM.chatBotDefaultIcon.style.display = "none";
+  } else {
+    DOM.chatBotLogo.style.display = "none";
+    DOM.chatBotDefaultIcon.style.display = "block";
+  }
+}
+
+function goBackToDirectory() {
+  currentRestaurantId = "";
+  activeBusiness = null;
+  
+  // Clear restaurante from URL search params without reloading
+  const url = new URL(window.location.href);
+  url.searchParams.delete("restaurante");
+  window.history.pushState({}, document.title, url.pathname);
+  
+  showBusinessesDirectory();
+}
+
+function showBusinessesDirectory() {
+  DOM.chatbotView.style.display = "none";
+  DOM.directoryView.style.display = "block";
+  loadBusinessesList();
+}
+
+async function loadBusinessesList() {
+  DOM.businessesGrid.innerHTML = `
+    <div class="loading-spinner" style="grid-column: 1/-1; text-align: center; color: var(--text-muted); padding: 40px;">
+      <i class="bx bx-loader-alt bx-spin" style="font-size: 2.2rem; margin-bottom: 12px; display: block; color: var(--color-primary);"></i>
+      Cargando comercios disponibles...
+    </div>
+  `;
+  
+  if (isFirebaseEnabled) {
+    try {
+      const q = query(collection(db, "businesses"));
+      onSnapshot(q, (snapshot) => {
+        const list = [];
+        snapshot.forEach((docSnap) => {
+          list.push({ id: docSnap.id, ...docSnap.data() });
+        });
+        renderBusinessesGrid(list);
+      });
+    } catch (err) {
+      console.error("Error loading businesses directory:", err);
+      DOM.businessesGrid.innerHTML = `<div class="no-data-msg" style="grid-column: 1/-1;">Error al cargar los comercios. Revisa la consola.</div>`;
+    }
+  } else {
+    // Local fallback
+    const mockList = [
+      { id: "burger-shack", name: "Burger Shack", description: "Las mejores hamburguesas gourmet smash y papas fritas trufadas.", schedule: "Mar - Dom, 12:00 a 23:00", address: "Av. Gourmet 123", paymentMethod: "Efectivo, Tarjeta", minDeliveryAmount: "10.00" },
+      { id: "pizza-napolitana", name: "Pizza Napolitana", description: "Pizzas artesanales cocinadas al horno de leña al estilo napolitano.", schedule: "Mar - Dom, 12:00 a 23:00", address: "Vía Italia 456", paymentMethod: "Efectivo, Transferencia", minDeliveryAmount: "12.00" },
+      { id: "sushi-zen", name: "Sushi Zen", description: "Rolls de sushi premium, sashimi fresco y platos calientes japoneses.", schedule: "Mié - Lun, 13:00 a 23:30", address: "Calle Kioto 789", paymentMethod: "Tarjeta, Transferencia", minDeliveryAmount: "15.00" }
+    ];
+    renderBusinessesGrid(mockList);
+  }
+}
+
+function renderBusinessesGrid(list) {
+  DOM.businessesGrid.innerHTML = "";
+  if (list.length === 0) {
+    DOM.businessesGrid.innerHTML = `<div class="no-data-msg" style="grid-column: 1/-1;">No hay comercios registrados actualmente.</div>`;
+    return;
+  }
+  
+  list.forEach(biz => {
+    const card = document.createElement("div");
+    card.className = "card glass-card business-directory-card animate-slide-up";
+    card.style.padding = "22px";
+    card.style.display = "flex";
+    card.style.flexDirection = "column";
+    card.style.gap = "14px";
+    card.style.borderRadius = "var(--border-radius-md)";
+    card.style.border = "1px solid var(--border-glass)";
+    card.style.transition = "transform 0.25s ease, border-color 0.25s ease, box-shadow 0.25s ease";
+    card.style.cursor = "pointer";
+    
+    card.onmouseenter = () => {
+      card.style.transform = "translateY(-4px)";
+      card.style.borderColor = "rgba(108, 92, 231, 0.4)";
+      card.style.boxShadow = "0 8px 30px rgba(108, 92, 231, 0.15)";
+    };
+    card.onmouseleave = () => {
+      card.style.transform = "translateY(0)";
+      card.style.borderColor = "var(--border-glass)";
+      card.style.boxShadow = "none";
+    };
+    
+    const logoUrl = biz.logoUrl || "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&w=80&q=80";
+    
+    card.innerHTML = `
+      <div style="display: flex; gap: 15px; align-items: center;">
+        <img src="${logoUrl}" alt="${biz.name}" style="width: 55px; height: 55px; object-fit: cover; border-radius: 50%; border: 2px solid var(--color-primary-glow);" onerror="this.src='https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&w=80&q=80'">
+        <div style="flex: 1;">
+          <h3 style="margin: 0; font-size: 1.2rem; color: var(--text-main); font-weight: 700; font-family: var(--font-display);">${biz.name}</h3>
+          <span class="status-badge status-badge-preparing" style="margin-top: 5px; font-size: 0.62rem; display: inline-block; text-transform: uppercase;">${biz.category || 'COMIDA'}</span>
+        </div>
+      </div>
+      
+      <p style="margin: 0; font-size: 0.82rem; color: var(--text-secondary); min-height: 38px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; line-height: 1.45;">
+        ${biz.description || 'Disfruta de la mejor calidad y servicio directamente a tu domicilio.'}
+      </p>
+      
+      <div style="border-top: 1px solid rgba(255, 255, 255, 0.05); padding-top: 12px; font-size: 0.76rem; color: var(--text-muted); display: flex; flex-direction: column; gap: 6px;">
+        <div style="display:flex; align-items:center; gap:6px;"><i class="bx bx-time" style="color: var(--color-primary); font-size: 0.95rem;"></i> <span><strong>Horario:</strong> ${biz.schedule || 'Mar - Dom, 12:00 a 23:00'}</span></div>
+        <div style="display:flex; align-items:center; gap:6px;"><i class="bx bx-map" style="color: var(--color-primary); font-size: 0.95rem;"></i> <span><strong>Ubicación:</strong> ${biz.address || 'Ubicación céntrica'}</span></div>
+        <div style="display:flex; align-items:center; gap:6px;"><i class="bx bx-credit-card" style="color: var(--color-primary); font-size: 0.95rem;"></i> <span><strong>Pagos:</strong> ${biz.paymentMethod || 'Efectivo, Tarjeta'}</span></div>
+        <div style="display:flex; align-items:center; gap:6px;"><i class="bx bx-cycling" style="color: var(--color-primary); font-size: 0.95rem;"></i> <span><strong>Min. Delivery:</strong> $${parseFloat(biz.minDeliveryAmount || 0).toFixed(2)}</span></div>
+      </div>
+      
+      <button class="primary-btn btn-enter-biz" style="width: 100%; margin-top: auto; display: flex; align-items: center; justify-content: center; gap: 8px;">
+        <i class="bx bx-chat"></i> Ingresar al Negocio
+      </button>
+    `;
+    
+    const enterBiz = () => {
+      const url = new URL(window.location.href);
+      url.searchParams.set("restaurante", biz.id);
+      window.history.pushState({}, document.title, url.search);
+      
+      currentRestaurantId = biz.id;
+      loadActiveBusinessAndStartChat(biz.id);
+    };
+    
+    card.addEventListener("click", enterBiz);
+    card.querySelector(".btn-enter-biz").addEventListener("click", (e) => {
+      e.stopPropagation();
+      enterBiz();
+    });
+    
+    DOM.businessesGrid.appendChild(card);
+  });
 }
 
 // Sync products catalog in real-time from ALL businesses in Firebase
@@ -209,6 +412,8 @@ function setupEventListeners() {
     if (e.key === "Enter") handleUserMessageSend();
   });
   
+  DOM.btnBackToDirectory.addEventListener("click", goBackToDirectory);
+  
   DOM.suggestionTags.forEach(tag => {
     tag.addEventListener("click", () => {
       DOM.chatInput.value = tag.innerText.substring(2); // Strip emoji prefix
@@ -341,43 +546,47 @@ async function handleUserMessageSend() {
   DOM.chatInput.value = "";
   appendChatMessage("user", text);
   
-  // Build catalog context grouped by business (CAG - Context Augmented Generation)
+  // Scope products and catalog context to current business
   let catalogText = "";
-  if (products.length > 0) {
-    // Group by business
-    const byBiz = {};
-    products.forEach(p => {
-      const key = p._bizId || "general";
-      const name = p._bizName || key;
-      if (!byBiz[key]) byBiz[key] = { name, items: [] };
-      byBiz[key].items.push(p);
-    });
-
-    catalogText = Object.values(byBiz).map(biz => {
-      const itemLines = biz.items.map(p =>
-        `  • ${p.name} — $${parseFloat(p.price).toFixed(2)} [${p.category || 'comida'}]: ${p.description || p.desc || ""}`
-      ).join("\n");
-      return `📍 Negocio: ${biz.name}\n${itemLines}`;
-    }).join("\n\n");
+  const bizProducts = products.filter(p => p._bizId === currentRestaurantId || p.restaurantId === currentRestaurantId);
+  
+  if (bizProducts.length > 0) {
+    catalogText = bizProducts.map(p =>
+      `  • ${p.name} — $${parseFloat(p.price).toFixed(2)} [${p.category || 'comida'}]: ${p.description || p.desc || ""}`
+    ).join("\n");
   } else {
-    catalogText = "(No hay productos cargados aún. Indica al cliente que vuelva en unos momentos.)";
+    catalogText = "(No hay productos disponibles en este negocio actualmente.)";
   }
 
-  const systemPrompt = `Eres Nexus AI, un asistente virtual inteligente de pedidos en ESPAÑOL para una plataforma multi-negocio.
-Tienes acceso al catálogo completo de TODOS los negocios registrados:
+  const bizName = activeBusiness ? activeBusiness.name : "este negocio";
+  const bizSchedule = activeBusiness ? activeBusiness.schedule : "horario regular";
+  const bizPhone = activeBusiness ? activeBusiness.phone : "no especificado";
+  const bizAddress = activeBusiness ? activeBusiness.address : "no especificada";
+  const bizPay = activeBusiness ? activeBusiness.paymentMethod : "Efectivo, Tarjeta";
+  const bizMin = activeBusiness ? parseFloat(activeBusiness.minDeliveryAmount || 0).toFixed(2) : "0.00";
+  const bizDesc = activeBusiness ? activeBusiness.description : "";
 
-===== CATÁLOGO COMPLETO POR NEGOCIO =====
+  const systemPrompt = `Eres Nexus AI, el asistente virtual inteligente de pedidos para "${bizName}" (${bizDesc || 'comida variada'}).
+Responde en ESPAÑOL.
+
+===== DATOS DE "${bizName}" =====
+WhatsApp: ${bizPhone}
+Horario: ${bizSchedule}
+Dirección: ${bizAddress}
+Formas de Pago: ${bizPay}
+Pedido Mínimo a Domicilio: $${bizMin}
+==================================
+
+===== CATÁLOGO DE PRODUCTOS =====
 ${catalogText}
-==========================================
+==================================
 
 INSTRUCCIONES CLAVE:
-1. Sé amable, conciso y siempre responde en español.
-2. Si el cliente quiere ver el menú, comprar o hacer un pedido, envíalo al Catálogo Web con el link: [Ver Catálogo Web](./catalog.html). Explícale que al confirmar su selección, el pedido regresará automáticamente aquí.
-3. Solo menciona productos que EXISTAN en el catálogo de arriba. Nunca inventes precios ni productos.
-4. Si un cliente pregunta por un negocio específico, muéstrale solo los productos de ese negocio.
-5. Horarios generales: Martes a Domingo, 12:00 PM a 11:00 PM (verifica con cada negocio si difieren).
-6. Envíos: $2.00 a domicilio, gratis en compras mayores a $15.00.
-7. Pagos aceptados: Efectivo, Transferencia Bancaria, Tarjeta de Crédito/Débito.`;
+1. Sé amable, conciso y responde en español.
+2. Si el cliente quiere ver el menú, comprar o realizar un pedido, indícale que abra el enlace del Catálogo Web: [Ver Catálogo Web](./catalog.html?restaurante=${currentRestaurantId}). Explícale que al confirmar su carrito, el pedido se enviará automáticamente aquí.
+3. Solo menciona productos que EXISTAN en el catálogo de "${bizName}" de arriba. Nunca inventes precios ni platos.
+4. Si preguntan por métodos de pago, indica que aceptan: ${bizPay}.
+5. Si preguntan por entrega a domicilio, indica que se reparte a partir de un consumo mínimo de $${bizMin}.`;
 
   const conversationContext = getChatContextForAPI(systemPrompt);
   const loadingId = appendChatLoading();
@@ -417,7 +626,7 @@ INSTRUCCIONES CLAVE:
   } catch (error) {
     console.error("AI API Call Error:", error);
     removeChatLoading(loadingId);
-    appendChatMessage("bot", `Lo siento, experimenté un inconveniente al conectarme al cerebro de IA (${config.provider === 'nvidia' ? 'Nemotron' : 'Gemini'}).\n\nPor favor, verifica la consola del servidor backend o vuelve a intentar.`);
+    appendChatMessage("bot", `Lo siento, experimenté un inconveniente al conectarme al cerebro de IA de ${bizName} (${config.provider === 'nvidia' ? 'Nemotron' : 'Gemini'}).\n\nPor favor, verifica la conexión o vuelve a intentar.`);
   }
 }
 
@@ -445,13 +654,14 @@ function getDemoBotResponse(userText) {
   return new Promise((resolve) => {
     setTimeout(() => {
       const text = userText.toLowerCase();
+      const bizName = activeBusiness ? activeBusiness.name : "nuestro negocio";
       let reply = "";
       if (text.includes("hola") || text.includes("buenas")) {
-        reply = "¡Hola! 👋 Bienvenido a Nexus. ¿En qué puedo ayudarte? Puedes preguntarme sobre el menú o abrir directamente nuestro [Catálogo PWA](./catalog.html) para armar tu pedido.";
+        reply = `¡Hola! 👋 Bienvenido a **${bizName}**. ¿En qué puedo ayudarte? Puedes preguntarme sobre nuestro menú o abrir directamente nuestro [Catálogo Web](./catalog.html?restaurante=${currentRestaurantId}) para armar tu pedido.`;
       } else if (text.includes("menu") || text.includes("catalogo") || text.includes("carta") || text.includes("comprar")) {
-        reply = "¡Por supuesto! 🍔 Te invito a explorar nuestro catálogo web móvil. Haz clic en el enlace del [Catálogo Web](./catalog.html) para seleccionar tus antojos. Al confirmar, tu orden regresará a esta conversación automáticamente.";
+        reply = `¡Por supuesto! 🍔 Te invito a explorar el menú de **${bizName}**. Haz clic en el enlace del [Catálogo Web](./catalog.html?restaurante=${currentRestaurantId}) para seleccionar tus productos. Al confirmar, tu orden regresará a esta conversación automáticamente.`;
       } else {
-        reply = "¡Entendido! Soy una simulación. Para experimentar respuestas 100% dinámicas de Nemotron, activa la configuración en el navbar.";
+        reply = `¡Entendido! Soy la simulación de Nexus para **${bizName}**. Para experimentar respuestas 100% dinámicas de Nemotron, activa la configuración en el navbar superior.`;
       }
       resolve(reply);
     }, 1000);

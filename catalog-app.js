@@ -39,6 +39,8 @@ const DEFAULT_PRODUCTS = [
 
 let products = [];
 let cart = JSON.parse(localStorage.getItem("nexus_cart")) || [];
+let minDeliveryAmount = 0.00;
+let businessPaymentMethod = "";
 
 // --- DOM ELEMENTS REFERENCE ---
 const DOM = {
@@ -56,7 +58,8 @@ const DOM = {
   btnCheckout: document.getElementById("btn-checkout-submit"),
   checkoutName: document.getElementById("checkout-name"),
   checkoutPhone: document.getElementById("checkout-phone"),
-  checkoutAddress: document.getElementById("checkout-address")
+  checkoutAddress: document.getElementById("checkout-address"),
+  minDeliveryWarning: document.getElementById("min-delivery-warning")
 };
 
 let selectedCategory = "all";
@@ -71,6 +74,13 @@ function initCatalog() {
   updateCartUI();
   setupEventListeners();
   loadProducts();
+  loadPromos();
+  
+  // Set back button destination to preserve current restaurant
+  const backBtn = document.querySelector(".header-logo a");
+  if (backBtn) {
+    backBtn.href = `./?restaurante=${currentRestaurantId}`;
+  }
 }
 
 // Load products and business info from Firestore
@@ -81,10 +91,16 @@ function loadProducts() {
     onSnapshot(restRef, (docSnap) => {
       if (docSnap.exists()) {
         const restData = docSnap.data();
+        minDeliveryAmount = parseFloat(restData.minDeliveryAmount || 0);
+        businessPaymentMethod = restData.paymentMethod || "Efectivo";
+        
         const headerTitle = document.querySelector(".logo-text h1");
         const headerDesc = document.querySelector(".logo-text p");
         if (headerTitle) headerTitle.innerHTML = `NEXUS <span class="accent-text">${restData.name.toUpperCase()}</span>`;
         if (headerDesc) headerDesc.innerText = restData.schedule || "Catálogo Digital PWA";
+        
+        // Update checkout placeholder/details with payment info
+        DOM.checkoutAddress.placeholder = `Dirección de entrega * (Mín. envío: $${minDeliveryAmount.toFixed(2)} o 'Retiro en Local')`;
       }
     });
 
@@ -104,10 +120,84 @@ function loadProducts() {
     });
   } else {
     // Local fallback
+    const mockRestaurants = {
+      "burger-shack": { name: "Burger Shack", schedule: "Mar - Dom, 12:00 a 23:00", paymentMethod: "Efectivo, Tarjeta", minDeliveryAmount: "10.00" },
+      "pizza-napolitana": { name: "Pizza Napolitana", schedule: "Mar - Dom, 12:00 a 23:00", paymentMethod: "Efectivo, Transferencia", minDeliveryAmount: "12.00" },
+      "sushi-zen": { name: "Sushi Zen", schedule: "Mié - Lun, 13:00 a 23:30", paymentMethod: "Tarjeta, Transferencia", minDeliveryAmount: "15.00" }
+    };
+    const restData = mockRestaurants[currentRestaurantId] || { name: currentRestaurantId, schedule: "Mar - Dom, 12:00 a 23:00", paymentMethod: "Efectivo", minDeliveryAmount: "0.00" };
+    minDeliveryAmount = parseFloat(restData.minDeliveryAmount);
+    businessPaymentMethod = restData.paymentMethod;
+    
+    const headerTitle = document.querySelector(".logo-text h1");
+    const headerDesc = document.querySelector(".logo-text p");
+    if (headerTitle) headerTitle.innerHTML = `NEXUS <span class="accent-text">${restData.name.toUpperCase()}</span>`;
+    if (headerDesc) headerDesc.innerText = restData.schedule || "Catálogo Digital PWA";
+    
+    DOM.checkoutAddress.placeholder = `Dirección de entrega * (Mín. envío: $${minDeliveryAmount.toFixed(2)} o 'Retiro en Local')`;
+
     const allProducts = JSON.parse(localStorage.getItem("nexus_products")) || DEFAULT_PRODUCTS;
     products = allProducts.filter(p => p.restaurantId === currentRestaurantId);
     renderCatalog();
   }
+}
+
+function loadPromos() {
+  if (isFirebaseEnabled) {
+    const q = query(collection(db, "businesses", currentRestaurantId, "promos"));
+    onSnapshot(q, (snapshot) => {
+      const fbPromos = [];
+      snapshot.forEach((doc) => {
+        const data = doc.data();
+        if (data.isActive) fbPromos.push({ id: doc.id, ...data });
+      });
+      renderPromos(fbPromos);
+    }, (err) => {
+      console.error("Error loading promos:", err);
+      renderPromos([]);
+    });
+  } else {
+    // Local fallback
+    const allPromos = JSON.parse(localStorage.getItem(`nexus_promos_${currentRestaurantId}`)) || [];
+    renderPromos(allPromos.filter(p => p.isActive));
+  }
+}
+
+function renderPromos(activePromos) {
+  const container = document.getElementById("promos-container");
+  const slider = document.getElementById("promos-slider");
+  if (!slider || !container) return;
+
+  if (activePromos.length === 0) {
+    container.style.display = "none";
+    return;
+  }
+
+  container.style.display = "block";
+  slider.innerHTML = "";
+
+  activePromos.forEach(p => {
+    const card = document.createElement("div");
+    card.className = "card glass-card promo-card";
+    card.style.minWidth = "240px";
+    card.style.flex = "0 0 auto";
+    card.style.padding = "12px 15px";
+    card.style.display = "flex";
+    card.style.flexDirection = "column";
+    card.style.gap = "6px";
+    card.style.borderRadius = "var(--border-radius-md)";
+    card.style.border = "1px solid var(--border-glass)";
+    card.style.background = "rgba(108, 92, 231, 0.05)";
+
+    card.innerHTML = `
+      <div style="display:flex; justify-content:space-between; align-items:center; gap: 8px;">
+        <h4 style="margin:0; font-size:0.92rem; color:var(--text-main); font-weight:700;">${p.title}</h4>
+        <span class="status-badge status-badge-completed" style="font-family:var(--font-mono); font-weight:700; margin:0; font-size:0.7rem; padding: 2px 6px; background: rgba(108,92,231,0.2); border: 1px solid var(--color-primary); color: var(--color-primary);">${p.value}</span>
+      </div>
+      <p style="margin:0; font-size:0.75rem; color:var(--text-secondary); line-height:1.35; white-space: normal;">${p.description}</p>
+    `;
+    slider.appendChild(card);
+  });
 }
 
 function renderCatalog() {
@@ -195,6 +285,7 @@ function renderCartDrawer() {
     `;
     DOM.cartSubtotal.innerText = "$0.00";
     DOM.cartTotal.innerText = "$0.00";
+    checkMinDeliveryAmount(0);
     return;
   }
   
@@ -227,6 +318,35 @@ function renderCartDrawer() {
   
   DOM.cartSubtotal.innerText = `$${subtotal.toFixed(2)}`;
   DOM.cartTotal.innerText = `$${subtotal.toFixed(2)}`;
+  
+  checkMinDeliveryAmount(subtotal);
+}
+
+function checkMinDeliveryAmount(subtotal) {
+  if (cart.length === 0) {
+    DOM.minDeliveryWarning.style.display = "none";
+    DOM.btnCheckout.disabled = false;
+    DOM.btnCheckout.style.opacity = "1";
+    DOM.btnCheckout.style.cursor = "pointer";
+    return;
+  }
+
+  const address = DOM.checkoutAddress.value.trim().toLowerCase();
+  const isDelivery = address !== "" && address !== "retiro en local" && address !== "retiro";
+  const meetsMin = !isDelivery || subtotal >= minDeliveryAmount;
+
+  if (isDelivery && !meetsMin) {
+    DOM.minDeliveryWarning.style.display = "block";
+    DOM.minDeliveryWarning.innerText = `⚠️ El pedido mínimo para entrega a domicilio es $${minDeliveryAmount.toFixed(2)}. Te faltan $${(minDeliveryAmount - subtotal).toFixed(2)}.`;
+    DOM.btnCheckout.disabled = true;
+    DOM.btnCheckout.style.opacity = "0.5";
+    DOM.btnCheckout.style.cursor = "not-allowed";
+  } else {
+    DOM.minDeliveryWarning.style.display = "none";
+    DOM.btnCheckout.disabled = false;
+    DOM.btnCheckout.style.opacity = "1";
+    DOM.btnCheckout.style.cursor = "pointer";
+  }
 }
 
 function changeQty(productId, delta) {
@@ -333,6 +453,11 @@ function setupEventListeners() {
   DOM.catalogSearch.addEventListener("input", (e) => {
     searchFilter = e.target.value;
     renderCatalog();
+  });
+
+  DOM.checkoutAddress.addEventListener("input", () => {
+    const subtotal = cart.reduce((acc, item) => acc + (item.price * item.qty), 0);
+    checkMinDeliveryAmount(subtotal);
   });
   
   DOM.btnCheckout.addEventListener("click", submitCheckout);

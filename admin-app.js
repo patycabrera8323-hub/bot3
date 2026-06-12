@@ -1,7 +1,7 @@
 /* ==========================================
    NEXUS AI - ADMIN APP LOGIC
-   Supports Role-Based Access Control and Multi-Restaurant Management
-   aligned with the 'admin negocios' Firebase Firestore structure
+   Supports Role-Based Access Control, Multi-Business Management,
+   Self-Registration, and Promo CRUD
    ========================================== */
 
 import { 
@@ -20,20 +20,16 @@ import {
 } from './firebase-config.js';
 
 // --- INITIAL STATE ---
-const DEFAULT_PRODUCTS = [
-  { id: "prod-bs-1", name: "Hamburguesa Double Smash", category: "comida", price: 12.00, imageUrl: "https://images.unsplash.com/photo-1568901346375-23c9450c58cd?auto=format&fit=crop&w=500&q=80", description: "Doble carne premium (120g c/u), cheddar derretido, cebolla caramelizada, pepinillos y salsa de la casa.", isAvailable: true, restaurantId: "burger-shack" },
-  { id: "prod-pn-1", name: "Pizza Pepperoni Suprema", category: "comida", price: 14.50, imageUrl: "https://images.unsplash.com/photo-1628840042765-356cda07504e?auto=format&fit=crop&w=500&q=80", description: "Masa artesanal delgada con salsa napolitana, mozzarella, pepperoni y orégano.", isAvailable: true, restaurantId: "pizza-napolitana" }
-];
-
 let products = [];
 let orders = [];
+let promos = [];
 
-// Active configuration state
 let currentRestaurantId = "";
 let userRole = "";
-let allowedRestaurantId = ""; // "all" or specific ID (e.g. "burger-shack")
+let allowedRestaurantId = ""; // "all" or specific business ID
 let productsUnsubscribe = null;
 let ordersUnsubscribe = null;
+let promosUnsubscribe = null;
 
 // --- DOM ELEMENTS REFERENCE ---
 const DOM = {
@@ -44,23 +40,42 @@ const DOM = {
   adminPendingBadge: document.getElementById("admin-pending-badge"),
   btnAddProduct: document.getElementById("btn-add-product"),
   btnClearOrders: document.getElementById("btn-clear-orders"),
-  
-  // Multi-Restaurant DOM Elements
+
+  // Multi-Restaurant Selector
   adminRestaurantSelect: document.getElementById("admin-restaurant-select"),
+  
+  // Restaurant Config Form (extended)
   formRestaurantConfig: document.getElementById("form-restaurant-config"),
   restName: document.getElementById("rest-name"),
+  restDesc: document.getElementById("rest-desc"),
   restPhone: document.getElementById("rest-phone"),
   restSchedule: document.getElementById("rest-schedule"),
   restAddress: document.getElementById("rest-address"),
+  restMinDelivery: document.getElementById("rest-min-delivery"),
+  restPayCash: document.getElementById("rest-pay-cash"),
+  restPayCard: document.getElementById("rest-pay-card"),
+  restPayTransfer: document.getElementById("rest-pay-transfer"),
   restLogo: document.getElementById("rest-logo"),
 
-  // Login Modal DOM Elements
+  // Login / Registration Modal
   modalLogin: document.getElementById("modal-login"),
   formLogin: document.getElementById("form-login"),
+  formRegister: document.getElementById("form-register"),
   loginEmail: document.getElementById("login-email"),
   loginErrorMsg: document.getElementById("login-error-msg"),
-  
-  // Modal Product Form
+  tabBtnLogin: document.getElementById("tab-btn-login"),
+  tabBtnRegister: document.getElementById("tab-btn-register"),
+  regOwnerName: document.getElementById("reg-owner-name"),
+  regOwnerEmail: document.getElementById("reg-owner-email"),
+  regOwnerPhone: document.getElementById("reg-owner-phone"),
+  regBizName: document.getElementById("reg-biz-name"),
+  regBizDesc: document.getElementById("reg-biz-desc"),
+  regBizSchedule: document.getElementById("reg-biz-schedule"),
+  regBizMinDelivery: document.getElementById("reg-biz-min-delivery"),
+  regBizAddress: document.getElementById("reg-biz-address"),
+  registerErrorMsg: document.getElementById("register-error-msg"),
+
+  // Product Form Modal
   modalProductForm: document.getElementById("modal-product-form"),
   productForm: document.getElementById("form-product"),
   productModalTitle: document.getElementById("product-modal-title"),
@@ -71,31 +86,65 @@ const DOM = {
   prodCategory: document.getElementById("prod-category"),
   prodPrice: document.getElementById("prod-price"),
   prodImg: document.getElementById("prod-img"),
-  prodDesc: document.getElementById("prod-desc")
+  prodDesc: document.getElementById("prod-desc"),
+
+  // Promo Panel & Modal
+  adminPromosList: document.getElementById("admin-promos-list"),
+  btnAddPromo: document.getElementById("btn-add-promo"),
+  modalPromoForm: document.getElementById("modal-promo-form"),
+  promoForm: document.getElementById("form-promo"),
+  promoModalTitle: document.getElementById("promo-modal-title"),
+  btnClosePromoModal: document.getElementById("btn-close-promo-modal"),
+  btnCancelPromoModal: document.getElementById("btn-cancel-promo-modal"),
+  promoId: document.getElementById("promo-id"),
+  promoTitle: document.getElementById("promo-title"),
+  promoValue: document.getElementById("promo-value"),
+  promoActive: document.getElementById("promo-active"),
+  promoDesc: document.getElementById("promo-desc"),
+  promoImg: document.getElementById("promo-img"),
 };
 
 // --- INITIALIZATION ---
 document.addEventListener("DOMContentLoaded", () => {
-  setupLoginHandler();
+  setupLoginAndRegisterHandlers();
 });
 
-// Setup Verification Logic (Super Admin vs Business Owner) using 'users' collection
-function setupLoginHandler() {
+// ============================================================
+// LOGIN & REGISTRATION HANDLERS
+// ============================================================
+function setupLoginAndRegisterHandlers() {
+  // Toggle between login/register tabs
+  DOM.tabBtnLogin.addEventListener("click", () => {
+    DOM.tabBtnLogin.classList.add("active");
+    DOM.tabBtnRegister.classList.remove("active");
+    DOM.formLogin.style.display = "block";
+    DOM.formRegister.style.display = "none";
+    DOM.loginErrorMsg.style.display = "none";
+  });
+
+  DOM.tabBtnRegister.addEventListener("click", () => {
+    DOM.tabBtnRegister.classList.add("active");
+    DOM.tabBtnLogin.classList.remove("active");
+    DOM.formRegister.style.display = "block";
+    DOM.formLogin.style.display = "none";
+    DOM.registerErrorMsg.style.display = "none";
+  });
+
+  // Login form submit
   DOM.formLogin.addEventListener("submit", async (e) => {
     e.preventDefault();
     const email = DOM.loginEmail.value.trim().toLowerCase();
     DOM.loginErrorMsg.style.display = "none";
-    
+
     if (!email) return;
 
     if (isFirebaseEnabled) {
       try {
         const q = query(collection(db, "users"), where("email", "==", email));
         const querySnapshot = await getDocs(q);
-        
+
         if (querySnapshot.empty) {
-          DOM.loginErrorMsg.innerText = "Acceso denegado. El correo no está registrado como administrador.";
-          DOM.loginErrorMsg.style.display = "block";
+          showLoginError("Acceso denegado. El correo no está registrado como administrador.");
           return;
         }
 
@@ -105,12 +154,7 @@ function setupLoginHandler() {
           if (u.role === "admin" || u.role === "owner") {
             isAuthorized = true;
             userRole = u.role;
-            // Map owner directly to their specified restaurantId, or fallback to doc ID if they are business specific
             allowedRestaurantId = u.restaurantId || "all";
-            if (u.role === "owner" && allowedRestaurantId === "all") {
-              // Lock to the doc ID if it's the owner account
-              allowedRestaurantId = docSnap.id === "admin-shack" ? "burger-shack" : docSnap.id;
-            }
           }
         });
 
@@ -118,16 +162,14 @@ function setupLoginHandler() {
           DOM.modalLogin.classList.remove("active");
           startAdminConsole();
         } else {
-          DOM.loginErrorMsg.innerText = "Acceso denegado. Este correo no tiene rol de administrador.";
-          DOM.loginErrorMsg.style.display = "block";
+          showLoginError("Acceso denegado. Este correo no tiene rol de administrador.");
         }
       } catch (err) {
         console.error("Firebase Auth Error:", err);
-        DOM.loginErrorMsg.innerText = `Error al verificar credenciales: ${err.message}`;
-        DOM.loginErrorMsg.style.display = "block";
+        showLoginError(`Error al verificar credenciales: ${err.message}`);
       }
     } else {
-      // Local fallback testing accounts
+      // Local fallback
       if (email === "searmoco@gmail.com") {
         userRole = "admin";
         allowedRestaurantId = "all";
@@ -139,34 +181,147 @@ function setupLoginHandler() {
         DOM.modalLogin.classList.remove("active");
         startAdminConsole();
       } else {
-        DOM.loginErrorMsg.innerText = "Acceso denegado. En modo local prueba con 'searmoco@gmail.com' o 'jicr1200@gmail.com'.";
-        DOM.loginErrorMsg.style.display = "block";
+        showLoginError("Acceso denegado. En modo local prueba con 'searmoco@gmail.com' o 'jicr1200@gmail.com'.");
       }
+    }
+  });
+
+  // Registration form submit
+  DOM.formRegister.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    DOM.registerErrorMsg.style.display = "none";
+
+    const ownerName = DOM.regOwnerName.value.trim();
+    const ownerEmail = DOM.regOwnerEmail.value.trim().toLowerCase();
+    const ownerPhone = DOM.regOwnerPhone.value.trim();
+    const bizName = DOM.regBizName.value.trim();
+    const bizDesc = DOM.regBizDesc.value.trim();
+    const bizSchedule = DOM.regBizSchedule.value.trim();
+    const bizMinDelivery = parseFloat(DOM.regBizMinDelivery.value) || 0;
+    const bizAddress = DOM.regBizAddress.value.trim();
+
+    // Collect checked payment methods
+    const payCheckboxes = document.querySelectorAll("input[name='reg-pay-method']:checked");
+    const paymentMethod = Array.from(payCheckboxes).map(c => c.value).join(", ") || "Efectivo";
+
+    if (!ownerName || !ownerEmail || !bizName || !bizDesc || !bizSchedule || !bizAddress) {
+      showRegisterError("Por favor completa todos los campos obligatorios.");
+      return;
+    }
+
+    // Generate a URL-friendly business ID from its name
+    const bizId = bizName
+      .toLowerCase()
+      .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/(^-|-$)/g, "");
+
+    const businessData = {
+      name: bizName,
+      description: bizDesc,
+      phone: ownerPhone,
+      schedule: bizSchedule,
+      address: bizAddress,
+      minDeliveryAmount: bizMinDelivery.toFixed(2),
+      paymentMethod: paymentMethod,
+      logoUrl: "",
+      ownerId: ownerEmail,
+      createdAt: Date.now()
+    };
+
+    const userData = {
+      name: ownerName,
+      email: ownerEmail,
+      phone: ownerPhone,
+      role: "owner",
+      restaurantId: bizId,
+      createdAt: Date.now()
+    };
+
+    if (isFirebaseEnabled) {
+      try {
+        // Check if email already exists
+        const existingUser = await getDocs(query(collection(db, "users"), where("email", "==", ownerEmail)));
+        if (!existingUser.empty) {
+          showRegisterError("Este correo ya está registrado. Ingresa desde la pestaña Iniciar Sesión.");
+          return;
+        }
+
+        // Check if bizId already exists
+        const existingBiz = await getDocs(query(collection(db, "businesses")));
+        let bizExists = false;
+        existingBiz.forEach(d => { if (d.id === bizId) bizExists = true; });
+        if (bizExists) {
+          showRegisterError(`El nombre de negocio "${bizName}" ya existe. Elige un nombre diferente.`);
+          return;
+        }
+
+        // Write to Firestore
+        await setDoc(doc(db, "businesses", bizId), businessData);
+        await addDoc(collection(db, "users"), userData);
+
+        // Auto-login after registration
+        userRole = "owner";
+        allowedRestaurantId = bizId;
+        DOM.modalLogin.classList.remove("active");
+        startAdminConsole();
+
+      } catch (err) {
+        console.error("Error registering business:", err);
+        showRegisterError(`Error al registrar: ${err.message}`);
+      }
+    } else {
+      // Local fallback – save to localStorage
+      const allBiz = JSON.parse(localStorage.getItem("nexus_businesses")) || {};
+      if (allBiz[bizId]) {
+        showRegisterError(`El nombre de negocio "${bizName}" ya existe localmente.`);
+        return;
+      }
+      allBiz[bizId] = businessData;
+      localStorage.setItem("nexus_businesses", JSON.stringify(allBiz));
+
+      userRole = "owner";
+      allowedRestaurantId = bizId;
+      DOM.modalLogin.classList.remove("active");
+      startAdminConsole();
     }
   });
 }
 
+function showLoginError(msg) {
+  DOM.loginErrorMsg.innerText = msg;
+  DOM.loginErrorMsg.style.display = "block";
+}
+
+function showRegisterError(msg) {
+  DOM.registerErrorMsg.innerText = msg;
+  DOM.registerErrorMsg.style.display = "block";
+}
+
+// ============================================================
+// ADMIN CONSOLE BOOT
+// ============================================================
 function startAdminConsole() {
   setupEventListeners();
   loadRestaurants();
 }
 
-// Load list of restaurants (businesses) to populate dropdown
+// ============================================================
+// LOAD BUSINESSES LIST INTO SELECTOR
+// ============================================================
 async function loadRestaurants() {
   if (isFirebaseEnabled) {
     try {
-      const q = query(collection(db, "businesses"));
-      const querySnapshot = await getDocs(q);
+      const querySnapshot = await getDocs(collection(db, "businesses"));
       DOM.adminRestaurantSelect.innerHTML = "";
-      
-      const loadedRestaurantes = [];
+
+      const loaded = [];
       querySnapshot.forEach((docSnap) => {
-        loadedRestaurantes.push({ id: docSnap.id, ...docSnap.data() });
+        loaded.push({ id: docSnap.id, ...docSnap.data() });
       });
 
-      // Filter based on allowedRestaurantId
-      const filtered = loadedRestaurantes.filter(r => allowedRestaurantId === "all" || r.id === allowedRestaurantId);
-      
+      const filtered = loaded.filter(r => allowedRestaurantId === "all" || r.id === allowedRestaurantId);
+
       if (filtered.length === 0) {
         DOM.adminRestaurantSelect.innerHTML = `<option value="">Sin tiendas disponibles</option>`;
         return;
@@ -179,192 +334,165 @@ async function loadRestaurants() {
         DOM.adminRestaurantSelect.appendChild(option);
       });
 
-      // Disable select dropdown if locked to single restaurant
-      if (allowedRestaurantId !== "all") {
-        DOM.adminRestaurantSelect.disabled = true;
-      } else {
-        DOM.adminRestaurantSelect.disabled = false;
-      }
-
-      // Select first option by default
+      DOM.adminRestaurantSelect.disabled = allowedRestaurantId !== "all";
       DOM.adminRestaurantSelect.value = filtered[0].id;
       currentRestaurantId = filtered[0].id;
-      
       onRestaurantChanged();
     } catch (err) {
       console.error("Error loading restaurants:", err);
     }
   } else {
-    // Local fallback list
-    const mockRestaurants = [
-      { id: "burger-shack", name: "Burger Shack" },
-      { id: "pizza-napolitana", name: "Pizza Napolitana" },
-      { id: "sushi-zen", name: "Sushi Zen" }
-    ];
-    
+    // Local fallback – includes localStorage-saved businesses
+    const savedBiz = JSON.parse(localStorage.getItem("nexus_businesses")) || {};
+    const mockBiz = { "burger-shack": { name: "Burger Shack" }, "pizza-napolitana": { name: "Pizza Napolitana" } };
+    const allBiz = { ...mockBiz, ...savedBiz };
+
     DOM.adminRestaurantSelect.innerHTML = "";
-    const filtered = mockRestaurants.filter(r => allowedRestaurantId === "all" || r.id === allowedRestaurantId);
-    
-    filtered.forEach(r => {
+    const entries = Object.entries(allBiz)
+      .map(([id, data]) => ({ id, name: data.name }))
+      .filter(r => allowedRestaurantId === "all" || r.id === allowedRestaurantId);
+
+    entries.forEach(r => {
       const option = document.createElement("option");
       option.value = r.id;
       option.innerText = r.name;
       DOM.adminRestaurantSelect.appendChild(option);
     });
 
-    if (allowedRestaurantId !== "all") {
-      DOM.adminRestaurantSelect.disabled = true;
-    } else {
-      DOM.adminRestaurantSelect.disabled = false;
-    }
-
-    DOM.adminRestaurantSelect.value = filtered[0].id;
-    currentRestaurantId = filtered[0].id;
-    
+    DOM.adminRestaurantSelect.disabled = allowedRestaurantId !== "all";
+    DOM.adminRestaurantSelect.value = entries[0]?.id || "";
+    currentRestaurantId = entries[0]?.id || "";
     onRestaurantChanged();
   }
 }
 
-// Fired when active restaurant changes
+// ============================================================
+// WHEN RESTAURANT CHANGES
+// ============================================================
 function onRestaurantChanged() {
   loadRestaurantMetadata();
   loadAdminProducts();
   loadAdminOrders();
+  loadAdminPromos();
 }
 
-// Load restaurant metadata into config form fields from 'businesses'
+// ============================================================
+// RESTAURANT METADATA (Load + Save)
+// ============================================================
 async function loadRestaurantMetadata() {
   if (isFirebaseEnabled) {
-    try {
-      const q = query(collection(db, "businesses"));
-      onSnapshot(q, (snapshot) => {
-        snapshot.forEach((docSnap) => {
-          if (docSnap.id === currentRestaurantId) {
-            const data = docSnap.data();
-            DOM.restName.value = data.name || "";
-            DOM.restPhone.value = data.phone || "";
-            DOM.restSchedule.value = data.schedule || "";
-            DOM.restAddress.value = data.address || "";
-            DOM.restLogo.value = data.logoUrl || ""; // mapped to logoUrl
-          }
-        });
-      });
-    } catch (err) {
-      console.error("Error loading restaurant metadata:", err);
-    }
+    const restRef = doc(db, "businesses", currentRestaurantId);
+    onSnapshot(restRef, (docSnap) => {
+      if (docSnap.exists()) {
+        fillConfigForm(docSnap.data());
+      }
+    });
   } else {
-    // Local fallback settings load
-    const restData = JSON.parse(localStorage.getItem(`nexus_rest_config_${currentRestaurantId}`)) || {
-      name: currentRestaurantId === "burger-shack" ? "Burger Shack" : currentRestaurantId === "pizza-napolitana" ? "Pizza Napolitana" : "Sushi Zen",
-      phone: "+54 9 11 1234 5678",
-      schedule: "Mar - Dom, 12:00 a 23:00",
-      address: "Dirección de demostración",
+    const allBiz = JSON.parse(localStorage.getItem("nexus_businesses")) || {};
+    const data = allBiz[currentRestaurantId] || {
+      name: currentRestaurantId,
+      description: "",
+      phone: "",
+      schedule: "",
+      address: "",
+      minDeliveryAmount: "0.00",
+      paymentMethod: "Efectivo",
       logoUrl: ""
     };
-    DOM.restName.value = restData.name;
-    DOM.restPhone.value = restData.phone;
-    DOM.restSchedule.value = restData.schedule;
-    DOM.restAddress.value = restData.address;
-    DOM.restLogo.value = restData.logoUrl || "";
+    fillConfigForm(data);
   }
 }
 
-// Save restaurant metadata back to 'businesses'
+function fillConfigForm(data) {
+  DOM.restName.value = data.name || "";
+  DOM.restDesc.value = data.description || "";
+  DOM.restPhone.value = data.phone || "";
+  DOM.restSchedule.value = data.schedule || "";
+  DOM.restAddress.value = data.address || "";
+  DOM.restMinDelivery.value = data.minDeliveryAmount || "0.00";
+  DOM.restLogo.value = data.logoUrl || "";
+
+  // Payment checkboxes
+  const methods = (data.paymentMethod || "").split(",").map(m => m.trim());
+  DOM.restPayCash.checked = methods.includes("Efectivo");
+  DOM.restPayCard.checked = methods.includes("Tarjeta");
+  DOM.restPayTransfer.checked = methods.includes("Transferencia");
+}
+
 async function handleRestaurantConfigSubmit(e) {
   e.preventDefault();
-  
-  const name = DOM.restName.value.trim();
-  const phone = DOM.restPhone.value.trim();
-  const schedule = DOM.restSchedule.value.trim();
-  const address = DOM.restAddress.value.trim();
-  const logoUrl = DOM.restLogo.value.trim();
-  
-  const restData = { name, phone, schedule, address, logoUrl };
+
+  const payMethods = [];
+  if (DOM.restPayCash.checked) payMethods.push("Efectivo");
+  if (DOM.restPayCard.checked) payMethods.push("Tarjeta");
+  if (DOM.restPayTransfer.checked) payMethods.push("Transferencia");
+
+  const restData = {
+    name: DOM.restName.value.trim(),
+    description: DOM.restDesc.value.trim(),
+    phone: DOM.restPhone.value.trim(),
+    schedule: DOM.restSchedule.value.trim(),
+    address: DOM.restAddress.value.trim(),
+    minDeliveryAmount: parseFloat(DOM.restMinDelivery.value || 0).toFixed(2),
+    paymentMethod: payMethods.join(", ") || "Efectivo",
+    logoUrl: DOM.restLogo.value.trim()
+  };
 
   if (isFirebaseEnabled) {
     try {
-      const docRef = doc(db, "businesses", currentRestaurantId);
-      await updateDoc(docRef, restData);
+      await updateDoc(doc(db, "businesses", currentRestaurantId), restData);
       alert("¡Configuración del negocio guardada con éxito!");
     } catch (err) {
       console.error("Error updating business config:", err);
       alert(`Error al guardar configuración: ${err.message}`);
     }
   } else {
-    localStorage.setItem(`nexus_rest_config_${currentRestaurantId}`, JSON.stringify(restData));
+    const allBiz = JSON.parse(localStorage.getItem("nexus_businesses")) || {};
+    allBiz[currentRestaurantId] = { ...allBiz[currentRestaurantId], ...restData };
+    localStorage.setItem("nexus_businesses", JSON.stringify(allBiz));
     alert("¡Configuración guardada localmente!");
   }
 }
 
-// Load products from subcollection: businesses/{currentRestaurantId}/products
+// ============================================================
+// PRODUCTS (Load + Render + CRUD)
+// ============================================================
 function loadAdminProducts() {
-  if (productsUnsubscribe) {
-    productsUnsubscribe();
-  }
+  if (productsUnsubscribe) productsUnsubscribe();
 
   if (isFirebaseEnabled) {
     const q = query(collection(db, "businesses", currentRestaurantId, "products"));
     productsUnsubscribe = onSnapshot(q, (snapshot) => {
-      const fbProducts = [];
-      snapshot.forEach((doc) => {
-        fbProducts.push({ id: doc.id, ...doc.data() });
-      });
-      products = fbProducts;
-      localStorage.setItem(`nexus_products_${currentRestaurantId}`, JSON.stringify(products));
+      products = [];
+      snapshot.forEach((d) => products.push({ id: d.id, ...d.data() }));
       renderAdminProductsList();
     });
   } else {
-    // Local fallback
-    const allProducts = JSON.parse(localStorage.getItem("nexus_products")) || DEFAULT_PRODUCTS;
+    const allProducts = JSON.parse(localStorage.getItem("nexus_products")) || [];
     products = allProducts.filter(p => p.restaurantId === currentRestaurantId);
     renderAdminProductsList();
   }
 }
 
-// Load orders from 'orders' collection where storeId == currentRestaurantId
-function loadAdminOrders() {
-  if (ordersUnsubscribe) {
-    ordersUnsubscribe();
-  }
-
-  if (isFirebaseEnabled) {
-    const q = query(collection(db, "orders"), where("storeId", "==", currentRestaurantId));
-    ordersUnsubscribe = onSnapshot(q, (snapshot) => {
-      const fbOrders = [];
-      snapshot.forEach((doc) => {
-        fbOrders.push({ firestoreId: doc.id, ...doc.data() });
-      });
-      orders = fbOrders;
-      localStorage.setItem(`nexus_orders_${currentRestaurantId}`, JSON.stringify(orders));
-      renderAdminOrdersList();
-    });
-  } else {
-    // Local fallback
-    const allOrders = JSON.parse(localStorage.getItem("nexus_orders")) || [];
-    orders = allOrders.filter(o => o.restaurantId === currentRestaurantId);
-    renderAdminOrdersList();
-  }
-}
-
 function renderAdminProductsList() {
   DOM.adminProductsList.innerHTML = "";
-  
+
   if (products.length === 0) {
-    DOM.adminProductsList.innerHTML = `<tr><td colspan="6" style="text-align:center;">No hay productos en este restaurante.</td></tr>`;
+    DOM.adminProductsList.innerHTML = `<tr><td colspan="6" style="text-align:center; color:var(--text-muted);">No hay productos. Agrega el primero.</td></tr>`;
     return;
   }
-  
+
   products.forEach(p => {
     const tr = document.createElement("tr");
     const imgUrl = p.imageUrl || p.img || "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&w=100&q=80";
     const descText = p.description || p.desc || "";
-    
+
     tr.innerHTML = `
       <td><img src="${imgUrl}" alt="${p.name}" class="admin-table-img" onerror="this.src='https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&w=100&q=80'"></td>
       <td style="font-weight:600; color:var(--text-main);">${p.name}</td>
       <td><span class="status-badge status-badge-preparing" style="margin-bottom:0; font-size:0.68rem;">${p.category || 'comida'}</span></td>
-      <td style="font-family:var(--font-mono); font-weight:700; color:var(--color-success);">$${p.price.toFixed(2)}</td>
-      <td style="max-width:240px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; font-size:0.78rem;">${descText}</td>
+      <td style="font-family:var(--font-mono); font-weight:700; color:var(--color-success);">$${parseFloat(p.price).toFixed(2)}</td>
+      <td style="max-width:220px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; font-size:0.78rem;">${descText}</td>
       <td>
         <div class="admin-actions">
           <button class="secondary-btn btn-icon-only edit-prod-btn" data-id="${p.id}" title="Editar"><i class="bx bx-edit"></i></button>
@@ -372,102 +500,17 @@ function renderAdminProductsList() {
         </div>
       </td>
     `;
-    
+
     tr.querySelector(".edit-prod-btn").addEventListener("click", () => openProductFormModal(p.id));
     tr.querySelector(".del-prod-btn").addEventListener("click", () => deleteProduct(p.id));
-    
     DOM.adminProductsList.appendChild(tr);
   });
 }
 
-function renderAdminOrdersList() {
-  DOM.adminOrdersList.innerHTML = "";
-  
-  const pendingCount = orders.filter(o => o.status === "pendiente" || o.status === "preparando").length;
-  DOM.adminPendingBadge.innerText = pendingCount;
-  DOM.adminPendingBadge.style.display = pendingCount > 0 ? "inline-block" : "none";
-  
-  if (orders.length === 0) {
-    DOM.adminOrdersList.innerHTML = `<div class="no-data-msg">No se han registrado pedidos en esta tienda.</div>`;
-    return;
-  }
-  
-  // Sort reverse chronological
-  const sorted = [...orders].sort((a, b) => b.id.localeCompare(a.id));
-  
-  sorted.forEach(o => {
-    const card = document.createElement("div");
-    card.className = `order-admin-card status-${o.status}`;
-    
-    const itemsListHTML = o.items.map(i => `<li>${i.qty}x ${i.name} ($${(i.price * i.qty).toFixed(2)})</li>`).join("");
-    
-    card.innerHTML = `
-      <div class="order-info-col">
-        <h3>Pedido #${o.id.replace("NEX-","")}</h3>
-        <p><strong>Cliente:</strong> ${o.customer}</p>
-        <p><strong>Teléfono:</strong> ${o.phone}</p>
-        <p><strong>Hora:</strong> ${o.time}</p>
-        <span class="status-badge status-badge-${o.status}">${o.status}</span>
-      </div>
-      <div class="order-items-col">
-        <p style="font-weight:600; font-size:0.75rem; text-transform:uppercase; color:var(--text-muted); margin-bottom:4px;">Productos:</p>
-        <ul>
-          ${itemsListHTML}
-        </ul>
-      </div>
-      <div class="order-price-col">
-        <div class="order-price-total">$${o.total.toFixed(2)}</div>
-        <p>${o.address}</p>
-      </div>
-      <div class="order-actions-col">
-        ${renderOrderAdminActions(o)}
-      </div>
-    `;
-    
-    DOM.adminOrdersList.appendChild(card);
-  });
-}
-
-function renderOrderAdminActions(order) {
-  const refId = order.firestoreId || order.id;
-  
-  if (order.status === "pendiente") {
-    return `<button class="primary-btn btn-sm btn-accept" data-ref-id="${refId}" data-next-status="preparando">Aceptar y Preparar</button>`;
-  } else if (order.status === "preparando") {
-    return `<button class="primary-btn btn-sm btn-ship" style="background:var(--color-info);" data-ref-id="${refId}" data-next-status="transit">Despachar Repartidor</button>`;
-  } else if (order.status === "transit") {
-    return `<button class="secondary-btn btn-sm btn-complete" data-ref-id="${refId}" data-next-status="completed"><i class="bx bx-check"></i> Entregado</button>`;
-  } else {
-    return `<span style="font-size:0.75rem; color:var(--color-success); font-weight:700;"><i class="bx bx-check-circle"></i> Pedido Completado</span>`;
-  }
-}
-
-async function advanceOrderStatus(refId, nextStatus) {
-  if (isFirebaseEnabled) {
-    try {
-      const orderRef = doc(db, "orders", refId);
-      await updateDoc(orderRef, { status: nextStatus });
-    } catch (e) {
-      console.error("Error updating order in Firebase:", e);
-    }
-  } else {
-    // Local fallback
-    const allOrders = JSON.parse(localStorage.getItem("nexus_orders")) || [];
-    const order = allOrders.find(o => o.id === refId);
-    if (order) {
-      order.status = nextStatus;
-      localStorage.setItem("nexus_orders", JSON.stringify(allOrders));
-      loadAdminOrders();
-    }
-  }
-}
-
-// --- PRODUCT FORM OPERATIONS ---
 function openProductFormModal(productId = null) {
   if (productId) {
     const prod = products.find(p => p.id === productId);
     if (!prod) return;
-    
     DOM.productModalTitle.innerText = "Editar Producto";
     DOM.prodId.value = prod.id;
     DOM.prodName.value = prod.name;
@@ -485,126 +528,340 @@ function openProductFormModal(productId = null) {
 
 async function handleProductFormSubmit(e) {
   e.preventDefault();
-  
+
   const id = DOM.prodId.value;
-  const name = DOM.prodName.value.trim();
-  const category = DOM.prodCategory.value;
-  const price = parseFloat(DOM.prodPrice.value);
-  const imageUrl = DOM.prodImg.value.trim();
-  const description = DOM.prodDesc.value.trim();
-  
-  const productData = { 
-    name, 
-    category, 
-    price, 
-    imageUrl, // mapped to imageUrl
-    description, // mapped to description
+  const productData = {
+    name: DOM.prodName.value.trim(),
+    category: DOM.prodCategory.value,
+    price: parseFloat(DOM.prodPrice.value),
+    imageUrl: DOM.prodImg.value.trim(),
+    description: DOM.prodDesc.value.trim(),
     isAvailable: true,
-    createdAt: Date.now()
+    updatedAt: Date.now()
   };
-  
+
   if (isFirebaseEnabled) {
     try {
       if (id) {
-        const docRef = doc(db, "businesses", currentRestaurantId, "products", id);
-        await updateDoc(docRef, productData);
+        await updateDoc(doc(db, "businesses", currentRestaurantId, "products", id), productData);
       } else {
-        const prodColRef = collection(db, "businesses", currentRestaurantId, "products");
-        await addDoc(prodColRef, productData);
+        await addDoc(collection(db, "businesses", currentRestaurantId, "products"), productData);
       }
     } catch (e) {
-      console.error("Error saving product to Firebase:", e);
+      console.error("Error saving product:", e);
       alert(`Error al guardar producto: ${e.message}`);
     }
   } else {
-    // Local fallback
-    const allProducts = JSON.parse(localStorage.getItem("nexus_products")) || DEFAULT_PRODUCTS;
+    const allProducts = JSON.parse(localStorage.getItem("nexus_products")) || [];
     if (id) {
-      const index = allProducts.findIndex(p => p.id === id);
-      if (index !== -1) {
-        allProducts[index] = { id, ...productData, restaurantId: currentRestaurantId };
-      }
+      const idx = allProducts.findIndex(p => p.id === id);
+      if (idx !== -1) allProducts[idx] = { id, ...productData, restaurantId: currentRestaurantId };
     } else {
-      const newId = "prod-" + Date.now();
-      allProducts.push({ id: newId, ...productData, restaurantId: currentRestaurantId });
+      allProducts.push({ id: "prod-" + Date.now(), ...productData, restaurantId: currentRestaurantId });
     }
     localStorage.setItem("nexus_products", JSON.stringify(allProducts));
     loadAdminProducts();
   }
-  
+
   DOM.modalProductForm.classList.remove("active");
 }
 
 async function deleteProduct(productId) {
   if (!confirm("¿Estás seguro de que deseas eliminar este producto?")) return;
-  
+
   if (isFirebaseEnabled) {
     try {
-      const docRef = doc(db, "businesses", currentRestaurantId, "products", productId);
-      await deleteDoc(docRef);
+      await deleteDoc(doc(db, "businesses", currentRestaurantId, "products", productId));
     } catch (e) {
-      console.error("Error deleting from Firebase:", e);
+      console.error("Error deleting product:", e);
       alert(`Error al eliminar: ${e.message}`);
     }
   } else {
-    // Local fallback
-    let allProducts = JSON.parse(localStorage.getItem("nexus_products")) || DEFAULT_PRODUCTS;
+    let allProducts = JSON.parse(localStorage.getItem("nexus_products")) || [];
     allProducts = allProducts.filter(p => p.id !== productId);
     localStorage.setItem("nexus_products", JSON.stringify(allProducts));
     loadAdminProducts();
   }
 }
 
-// --- SETUP EVENT LISTENERS ---
+// ============================================================
+// ORDERS (Load + Render + Status Updates)
+// ============================================================
+function loadAdminOrders() {
+  if (ordersUnsubscribe) ordersUnsubscribe();
+
+  if (isFirebaseEnabled) {
+    const q = query(collection(db, "orders"), where("storeId", "==", currentRestaurantId));
+    ordersUnsubscribe = onSnapshot(q, (snapshot) => {
+      orders = [];
+      snapshot.forEach((d) => orders.push({ firestoreId: d.id, ...d.data() }));
+      renderAdminOrdersList();
+    });
+  } else {
+    const allOrders = JSON.parse(localStorage.getItem("nexus_orders")) || [];
+    orders = allOrders.filter(o => o.storeId === currentRestaurantId || o.restaurantId === currentRestaurantId);
+    renderAdminOrdersList();
+  }
+}
+
+function renderAdminOrdersList() {
+  DOM.adminOrdersList.innerHTML = "";
+  const pendingCount = orders.filter(o => o.status === "pendiente" || o.status === "preparando").length;
+  DOM.adminPendingBadge.innerText = pendingCount;
+  DOM.adminPendingBadge.style.display = pendingCount > 0 ? "inline-block" : "none";
+
+  if (orders.length === 0) {
+    DOM.adminOrdersList.innerHTML = `<div class="no-data-msg">No se han registrado pedidos en esta tienda.</div>`;
+    return;
+  }
+
+  const sorted = [...orders].sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+
+  sorted.forEach(o => {
+    const card = document.createElement("div");
+    card.className = `order-admin-card status-${o.status}`;
+    const itemsListHTML = (o.items || []).map(i => `<li>${i.qty}x ${i.name} ($${(i.price * i.qty).toFixed(2)})</li>`).join("");
+
+    card.innerHTML = `
+      <div class="order-info-col">
+        <h3>Pedido #${(o.id || "???").replace("NEX-", "")}</h3>
+        <p><strong>Cliente:</strong> ${o.customer || o.name || "?"}</p>
+        <p><strong>Teléfono:</strong> ${o.phone || "?"}</p>
+        <p><strong>Hora:</strong> ${o.time || "?"}</p>
+        <span class="status-badge status-badge-${o.status}">${o.status}</span>
+      </div>
+      <div class="order-items-col">
+        <p style="font-weight:600; font-size:0.75rem; text-transform:uppercase; color:var(--text-muted); margin-bottom:4px;">Productos:</p>
+        <ul>${itemsListHTML}</ul>
+      </div>
+      <div class="order-price-col">
+        <div class="order-price-total">$${(o.total || 0).toFixed(2)}</div>
+        <p>${o.address || "?"}</p>
+      </div>
+      <div class="order-actions-col">
+        ${renderOrderAdminActions(o)}
+      </div>
+    `;
+    DOM.adminOrdersList.appendChild(card);
+  });
+}
+
+function renderOrderAdminActions(order) {
+  const refId = order.firestoreId || order.id;
+  if (order.status === "pendiente") {
+    return `<button class="primary-btn btn-sm btn-accept" data-ref-id="${refId}" data-next-status="preparando">Aceptar y Preparar</button>`;
+  } else if (order.status === "preparando") {
+    return `<button class="primary-btn btn-sm" style="background:var(--color-info);" data-ref-id="${refId}" data-next-status="transit">Despachar Repartidor</button>`;
+  } else if (order.status === "transit") {
+    return `<button class="secondary-btn btn-sm" data-ref-id="${refId}" data-next-status="completed"><i class="bx bx-check"></i> Entregado</button>`;
+  }
+  return `<span style="font-size:0.75rem; color:var(--color-success); font-weight:700;"><i class="bx bx-check-circle"></i> Completado</span>`;
+}
+
+async function advanceOrderStatus(refId, nextStatus) {
+  if (isFirebaseEnabled) {
+    try {
+      await updateDoc(doc(db, "orders", refId), { status: nextStatus });
+    } catch (e) {
+      console.error("Error updating order status:", e);
+    }
+  } else {
+    const allOrders = JSON.parse(localStorage.getItem("nexus_orders")) || [];
+    const order = allOrders.find(o => o.id === refId);
+    if (order) {
+      order.status = nextStatus;
+      localStorage.setItem("nexus_orders", JSON.stringify(allOrders));
+      loadAdminOrders();
+    }
+  }
+}
+
+// ============================================================
+// PROMOS (Load + Render + CRUD)
+// ============================================================
+function loadAdminPromos() {
+  if (promosUnsubscribe) promosUnsubscribe();
+
+  if (isFirebaseEnabled) {
+    const q = query(collection(db, "businesses", currentRestaurantId, "promos"));
+    promosUnsubscribe = onSnapshot(q, (snapshot) => {
+      promos = [];
+      snapshot.forEach((d) => promos.push({ id: d.id, ...d.data() }));
+      renderAdminPromosList();
+    });
+  } else {
+    promos = JSON.parse(localStorage.getItem(`nexus_promos_${currentRestaurantId}`)) || [];
+    renderAdminPromosList();
+  }
+}
+
+function renderAdminPromosList() {
+  DOM.adminPromosList.innerHTML = "";
+
+  if (promos.length === 0) {
+    DOM.adminPromosList.innerHTML = `<tr><td colspan="6" style="text-align:center; color:var(--text-muted);">No hay promociones. Agrega la primera.</td></tr>`;
+    return;
+  }
+
+  promos.forEach(p => {
+    const tr = document.createElement("tr");
+    const imgUrl = p.imageUrl || "";
+    const statusBadge = p.isActive
+      ? `<span class="status-badge status-badge-completed" style="font-size:0.65rem; background:rgba(0,200,80,0.15); border:1px solid var(--color-success); color:var(--color-success);">ACTIVA</span>`
+      : `<span class="status-badge status-badge-cancelled" style="font-size:0.65rem; background:rgba(235,94,85,0.15); border:1px solid var(--color-danger); color:var(--color-danger);">INACTIVA</span>`;
+
+    tr.innerHTML = `
+      <td>
+        ${imgUrl ? `<img src="${imgUrl}" alt="${p.title}" class="admin-table-img" onerror="this.style.display='none'">` : `<i class="bx bx-purchase-tag" style="font-size:1.8rem; color:var(--color-primary);"></i>`}
+      </td>
+      <td style="font-weight:600; color:var(--text-main);">${p.title}</td>
+      <td style="font-family:var(--font-mono); font-weight:700; color:var(--color-primary);">${p.value}</td>
+      <td style="max-width:200px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; font-size:0.78rem;">${p.description || ""}</td>
+      <td>${statusBadge}</td>
+      <td>
+        <div class="admin-actions">
+          <button class="secondary-btn btn-icon-only edit-promo-btn" data-id="${p.id}" title="Editar"><i class="bx bx-edit"></i></button>
+          <button class="danger-btn btn-icon-only del-promo-btn" data-id="${p.id}" title="Eliminar"><i class="bx bx-trash"></i></button>
+        </div>
+      </td>
+    `;
+
+    tr.querySelector(".edit-promo-btn").addEventListener("click", () => openPromoFormModal(p.id));
+    tr.querySelector(".del-promo-btn").addEventListener("click", () => deletePromo(p.id));
+    DOM.adminPromosList.appendChild(tr);
+  });
+}
+
+function openPromoFormModal(promoId = null) {
+  if (promoId) {
+    const promo = promos.find(p => p.id === promoId);
+    if (!promo) return;
+    DOM.promoModalTitle.innerText = "Editar Promoción";
+    DOM.promoId.value = promo.id;
+    DOM.promoTitle.value = promo.title;
+    DOM.promoValue.value = promo.value;
+    DOM.promoActive.checked = promo.isActive !== false;
+    DOM.promoDesc.value = promo.description || "";
+    DOM.promoImg.value = promo.imageUrl || "";
+  } else {
+    DOM.promoModalTitle.innerText = "Agregar Promoción";
+    DOM.promoForm.reset();
+    DOM.promoId.value = "";
+    DOM.promoActive.checked = true;
+  }
+  DOM.modalPromoForm.classList.add("active");
+}
+
+async function handlePromoFormSubmit(e) {
+  e.preventDefault();
+
+  const id = DOM.promoId.value;
+  const promoData = {
+    title: DOM.promoTitle.value.trim(),
+    value: DOM.promoValue.value.trim(),
+    isActive: DOM.promoActive.checked,
+    description: DOM.promoDesc.value.trim(),
+    imageUrl: DOM.promoImg.value.trim(),
+    updatedAt: Date.now()
+  };
+
+  if (isFirebaseEnabled) {
+    try {
+      if (id) {
+        await updateDoc(doc(db, "businesses", currentRestaurantId, "promos", id), promoData);
+      } else {
+        await addDoc(collection(db, "businesses", currentRestaurantId, "promos"), promoData);
+      }
+    } catch (err) {
+      console.error("Error saving promo:", err);
+      alert(`Error al guardar promoción: ${err.message}`);
+    }
+  } else {
+    const allPromos = JSON.parse(localStorage.getItem(`nexus_promos_${currentRestaurantId}`)) || [];
+    if (id) {
+      const idx = allPromos.findIndex(p => p.id === id);
+      if (idx !== -1) allPromos[idx] = { id, ...promoData };
+    } else {
+      allPromos.push({ id: "promo-" + Date.now(), ...promoData });
+    }
+    localStorage.setItem(`nexus_promos_${currentRestaurantId}`, JSON.stringify(allPromos));
+    loadAdminPromos();
+  }
+
+  DOM.modalPromoForm.classList.remove("active");
+}
+
+async function deletePromo(promoId) {
+  if (!confirm("¿Eliminar esta promoción?")) return;
+
+  if (isFirebaseEnabled) {
+    try {
+      await deleteDoc(doc(db, "businesses", currentRestaurantId, "promos", promoId));
+    } catch (err) {
+      console.error("Error deleting promo:", err);
+      alert(`Error al eliminar: ${err.message}`);
+    }
+  } else {
+    let allPromos = JSON.parse(localStorage.getItem(`nexus_promos_${currentRestaurantId}`)) || [];
+    allPromos = allPromos.filter(p => p.id !== promoId);
+    localStorage.setItem(`nexus_promos_${currentRestaurantId}`, JSON.stringify(allPromos));
+    loadAdminPromos();
+  }
+}
+
+// ============================================================
+// SETUP ALL EVENT LISTENERS
+// ============================================================
 function setupEventListeners() {
+  // Product modal
   DOM.btnAddProduct.addEventListener("click", () => openProductFormModal());
-  
-  const closeModal = () => DOM.modalProductForm.classList.remove("active");
-  DOM.btnCloseProductModal.addEventListener("click", closeModal);
-  DOM.btnCancelProductModal.addEventListener("click", closeModal);
+  DOM.btnCloseProductModal.addEventListener("click", () => DOM.modalProductForm.classList.remove("active"));
+  DOM.btnCancelProductModal.addEventListener("click", () => DOM.modalProductForm.classList.remove("active"));
   DOM.productForm.addEventListener("submit", handleProductFormSubmit);
-  
-  // Restaurant config submission
+
+  // Promo modal
+  DOM.btnAddPromo.addEventListener("click", () => openPromoFormModal());
+  DOM.btnClosePromoModal.addEventListener("click", () => DOM.modalPromoForm.classList.remove("active"));
+  DOM.btnCancelPromoModal.addEventListener("click", () => DOM.modalPromoForm.classList.remove("active"));
+  DOM.promoForm.addEventListener("submit", handlePromoFormSubmit);
+
+  // Restaurant config
   DOM.formRestaurantConfig.addEventListener("submit", handleRestaurantConfigSubmit);
 
-  // Dropdown change listener
+  // Business selector dropdown
   DOM.adminRestaurantSelect.addEventListener("change", (e) => {
     currentRestaurantId = e.target.value;
     onRestaurantChanged();
   });
 
+  // Admin tab navigation
   DOM.adminTabs.forEach(tab => {
     tab.addEventListener("click", () => {
       DOM.adminTabs.forEach(t => t.classList.remove("active"));
       tab.classList.add("active");
-      
       const target = tab.dataset.adminPanel;
       DOM.adminSubpanels.forEach(p => p.classList.remove("active"));
-      document.getElementById(target).classList.add("active");
+      document.getElementById(target)?.classList.add("active");
     });
   });
-  
+
+  // Clear orders
   DOM.btnClearOrders.addEventListener("click", async () => {
-    if (!confirm("¿Deseas limpiar todo el historial de pedidos de este restaurante?")) return;
-    
+    if (!confirm("¿Deseas limpiar todo el historial de pedidos?")) return;
     if (isFirebaseEnabled) {
       alert("En Firebase, los registros deben borrarse individualmente desde la consola por seguridad.");
     } else {
-      // Local fallback
       let allOrders = JSON.parse(localStorage.getItem("nexus_orders")) || [];
-      allOrders = allOrders.filter(o => o.restaurantId !== currentRestaurantId);
+      allOrders = allOrders.filter(o => (o.storeId || o.restaurantId) !== currentRestaurantId);
       localStorage.setItem("nexus_orders", JSON.stringify(allOrders));
       loadAdminOrders();
     }
   });
-  
-  // Delegated events for dynamic buttons inside orders grid
+
+  // Delegated event for order status buttons inside orders list
   DOM.adminOrdersList.addEventListener("click", (e) => {
-    const button = e.target.closest("button");
-    if (!button) return;
-    
-    const refId = button.dataset.refId;
-    const nextStatus = button.dataset.nextStatus;
-    advanceOrderStatus(refId, nextStatus);
+    const btn = e.target.closest("button[data-ref-id]");
+    if (!btn) return;
+    advanceOrderStatus(btn.dataset.refId, btn.dataset.nextStatus);
   });
 }
