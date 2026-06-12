@@ -292,6 +292,7 @@ async function syncProductsData() {
 }
 
 function updateAIModelBadge() {
+  if (!DOM.aiBadge) return;
   if (config.provider === "demo") {
     DOM.aiBadge.innerText = "Modelo: Demo Local Inteligente";
   } else if (config.provider === "nvidia") {
