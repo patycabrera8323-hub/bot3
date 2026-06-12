@@ -1,6 +1,7 @@
 /* ==========================================
    NEXUS AI - DELIVERY DRIVER BOARD LOGIC
    Supports Role-Based Access Control and Multi-Restaurant Delivery Management
+   aligned with the 'admin negocios' Firebase Firestore structure
    ========================================== */
 
 import { 
@@ -50,7 +51,7 @@ function setupLoginHandler() {
 
     if (isFirebaseEnabled) {
       try {
-        const q = query(collection(db, "usuarios"), where("email", "==", email));
+        const q = query(collection(db, "users"), where("email", "==", email));
         const querySnapshot = await getDocs(q);
         
         if (querySnapshot.empty) {
@@ -62,7 +63,7 @@ function setupLoginHandler() {
         let isAuthorized = false;
         querySnapshot.forEach((docSnap) => {
           const u = docSnap.data();
-          if (u.role === "repartidor" || u.role === "admin") {
+          if (u.role === "repartidor" || u.role === "admin" || u.role === "owner") {
             isAuthorized = true;
             driverRestaurantId = u.restaurantId || "burger-shack";
           }
@@ -104,7 +105,7 @@ function loadOrders() {
   }
 
   if (isFirebaseEnabled) {
-    const q = query(collection(db, "pedidos"), where("restaurantId", "==", driverRestaurantId));
+    const q = query(collection(db, "orders"), where("storeId", "==", driverRestaurantId));
     ordersUnsubscribe = onSnapshot(q, (snapshot) => {
       const fbOrders = [];
       snapshot.forEach((doc) => {
@@ -225,7 +226,7 @@ function renderDeliveryCardButton(order, refId) {
 async function advanceOrderStatus(refId, nextStatus) {
   if (isFirebaseEnabled) {
     try {
-      const orderRef = doc(db, "pedidos", refId);
+      const orderRef = doc(db, "orders", refId);
       await updateDoc(orderRef, { status: nextStatus });
     } catch (e) {
       console.error("Error updating status in Firebase:", e);

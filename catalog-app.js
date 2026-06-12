@@ -1,5 +1,6 @@
 /* ==========================================
    NEXUS AI - CATALOG APP LOGIC (PWA CATALOG)
+   aligned with the 'admin negocios' Firebase Firestore structure
    ========================================== */
 
 import { 
@@ -19,40 +20,24 @@ const currentRestaurantId = urlParams.get("restaurante") || "burger-shack";
 // --- INITIAL STATE & DEFAULT PRODUCTS ---
 const DEFAULT_PRODUCTS = [
   {
-    id: "prod-1",
+    id: "prod-bs-1",
     name: "Hamburguesa Double Smash",
     category: "comida",
     price: 12.00,
-    img: "https://images.unsplash.com/photo-1568901346375-23c9450c58cd?auto=format&fit=crop&w=500&q=80",
-    desc: "Doble carne premium (120g c/u), queso cheddar derretido, cebolla caramelizada, pepinillos y salsa de la casa."
+    imageUrl: "https://images.unsplash.com/photo-1568901346375-23c9450c58cd?auto=format&fit=crop&w=500&q=80",
+    description: "Doble carne premium (120g c/u), queso cheddar derretido, cebolla caramelizada, pepinillos y salsa de la casa."
   },
   {
-    id: "prod-2",
+    id: "prod-pn-1",
     name: "Pizza Pepperoni Suprema",
     category: "comida",
     price: 14.50,
-    img: "https://images.unsplash.com/photo-1628840042765-356cda07504e?auto=format&fit=crop&w=500&q=80",
-    desc: "Masa artesanal delgada con salsa napolitana, mozzarella, pepperoni y orégano."
-  },
-  {
-    id: "prod-3",
-    name: "Papas Fritas Trufa & Queso",
-    category: "comida",
-    price: 6.50,
-    img: "https://images.unsplash.com/photo-1573080496219-bb080dd4f877?auto=format&fit=crop&w=500&q=80",
-    desc: "Papas crujientes con aceite de trufa blanca, parmesano rallado y perejil fresco."
-  },
-  {
-    id: "prod-5",
-    name: "Limonada de Coco & Menta",
-    category: "bebida",
-    price: 3.50,
-    img: "https://images.unsplash.com/photo-1513558161293-cdaf765ed2fd?auto=format&fit=crop&w=500&q=80",
-    desc: "Batido refrescante de limón, crema de coco natural y menta fresca."
+    imageUrl: "https://images.unsplash.com/photo-1628840042765-356cda07504e?auto=format&fit=crop&w=500&q=80",
+    description: "Masa artesanal delgada con salsa napolitana, mozzarella, pepperoni y orégano."
   }
 ];
 
-let products = JSON.parse(localStorage.getItem("nexus_products")) || DEFAULT_PRODUCTS;
+let products = [];
 let cart = JSON.parse(localStorage.getItem("nexus_cart")) || [];
 
 // --- DOM ELEMENTS REFERENCE ---
@@ -88,11 +73,11 @@ function initCatalog() {
   loadProducts();
 }
 
-// Load products either from Firebase or localStorage
+// Load products and business info from Firestore
 function loadProducts() {
   if (isFirebaseEnabled) {
-    // 1. Fetch restaurant metadata
-    const restRef = doc(db, "restaurantes", currentRestaurantId);
+    // 1. Fetch business metadata
+    const restRef = doc(db, "businesses", currentRestaurantId);
     onSnapshot(restRef, (docSnap) => {
       if (docSnap.exists()) {
         const restData = docSnap.data();
@@ -103,26 +88,24 @@ function loadProducts() {
       }
     });
 
-    // 2. Fetch products for this restaurantId
-    const q = query(collection(db, "productos"), where("restaurantId", "==", currentRestaurantId));
+    // 2. Fetch products from subcollection
+    const q = query(collection(db, "businesses", currentRestaurantId, "products"));
     onSnapshot(q, (snapshot) => {
       const fbProducts = [];
       snapshot.forEach((doc) => {
         fbProducts.push({ id: doc.id, ...doc.data() });
       });
       products = fbProducts;
-      localStorage.setItem("nexus_products", JSON.stringify(products));
+      localStorage.setItem(`nexus_products_${currentRestaurantId}`, JSON.stringify(products));
       renderCatalog();
     }, (error) => {
       console.error("Error fetching Firestore products:", error);
       renderCatalog();
     });
   } else {
-    // If offline fallback, filter products array by currentRestaurantId
-    const hasRestaurantProducts = products.some(p => p.restaurantId === currentRestaurantId);
-    if (hasRestaurantProducts) {
-      products = products.filter(p => p.restaurantId === currentRestaurantId);
-    }
+    // Local fallback
+    const allProducts = JSON.parse(localStorage.getItem("nexus_products")) || DEFAULT_PRODUCTS;
+    products = allProducts.filter(p => p.restaurantId === currentRestaurantId);
     renderCatalog();
   }
 }
@@ -133,7 +116,7 @@ function renderCatalog() {
   const filtered = products.filter(p => {
     const matchesCat = (selectedCategory === "all" || p.category === selectedCategory);
     const matchesSearch = p.name.toLowerCase().includes(searchFilter.toLowerCase()) || 
-                          (p.desc && p.desc.toLowerCase().includes(searchFilter.toLowerCase()));
+                          ((p.description || p.desc || "").toLowerCase().includes(searchFilter.toLowerCase()));
     return matchesCat && matchesSearch;
   });
   
@@ -143,17 +126,19 @@ function renderCatalog() {
   }
   
   filtered.forEach(p => {
-    const imgUrl = p.img || "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&w=300&q=80";
+    const imgUrl = p.imageUrl || p.img || "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&w=300&q=80";
+    const descText = p.description || p.desc || "Deliciosa opción preparada con ingredientes frescos de primera calidad.";
+    
     const card = document.createElement("div");
     card.className = "product-card";
     card.innerHTML = `
       <div class="product-img-wrapper">
         <img src="${imgUrl}" alt="${p.name}" class="product-img" onerror="this.src='https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&w=300&q=80'">
-        <span class="product-tag">${p.category}</span>
+        <span class="product-tag">${p.category || 'comida'}</span>
       </div>
       <div class="product-info">
         <h4 class="product-name">${p.name}</h4>
-        <p class="product-desc">${p.desc || 'Deliciosa opción preparada con ingredientes frescos de primera calidad.'}</p>
+        <p class="product-desc">${descText}</p>
         <div class="product-footer">
           <span class="product-price">$${p.price.toFixed(2)}</span>
           <button class="btn-add-cart" data-id="${p.id}" title="Añadir al carrito">
@@ -164,7 +149,6 @@ function renderCatalog() {
     `;
     
     card.querySelector(".btn-add-cart").addEventListener("click", () => addToCart(p.id));
-    
     DOM.catalogGrid.appendChild(card);
   });
 }
@@ -181,7 +165,7 @@ function addToCart(productId) {
       id: prod.id,
       name: prod.name,
       price: prod.price,
-      img: prod.img,
+      img: prod.imageUrl || prod.img,
       qty: 1
     });
   }
@@ -258,7 +242,7 @@ function changeQty(productId, delta) {
   updateCartUI();
 }
 
-// --- SUBMIT CHECKOUT & WRITE TO FIREBASE / LOCALSTORAGE ---
+// --- SUBMIT CHECKOUT & WRITE TO 'orders' ---
 async function submitCheckout() {
   const name = DOM.checkoutName.value.trim();
   const phone = DOM.checkoutPhone.value.trim();
@@ -287,14 +271,15 @@ async function submitCheckout() {
     total: total,
     time: orderTime,
     status: "pendiente",
-    restaurantId: currentRestaurantId
+    storeId: currentRestaurantId, // mapped to storeId
+    createdAt: Date.now()
   };
   
-  // 1. Write order to database
+  // 1. Write order to 'orders' collection
   if (isFirebaseEnabled) {
     try {
-      await addDoc(collection(db, "pedidos"), orderData);
-      console.log("🔥 Pedido guardado en Firebase Firestore!");
+      await addDoc(collection(db, "orders"), orderData);
+      console.log("🔥 Pedido guardado en Firestore!");
     } catch (e) {
       console.error("Error guardando pedido en Firebase:", e);
       saveOrderToLocalStorageFallback(orderData);

@@ -23,71 +23,78 @@ app.use(express.static(path.join(__dirname)));
 const NVIDIA_API_KEY = "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";
 
 // --- API PROXY ROUTE ---
-app.post('/api/chat', (req, res) => {
+app.post('/api/chat', async (req, res) => {
   const { provider, messages, geminiKey, nvidiaKey } = req.body;
 
   if (provider === 'nvidia') {
     const apiKey = nvidiaKey || NVIDIA_API_KEY;
 
-    // Call NVIDIA Nemotron-3-Nano-Omni
-    const postData = JSON.stringify({
-      model: "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning",
-      messages: messages,
-      temperature: 0.6,
-      top_p: 0.95,
-      max_tokens: 1024,
-      extra_body: {
-        chat_template_kwargs: {
-          enable_thinking: true
+    try {
+      // 1. Try Llama 3.1 Nemotron 70B first
+      const response = await fetch('https://integrate.api.nvidia.com/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${apiKey}`
         },
-        reasoning_budget: 1024
-      },
-      stream: false
-    });
-
-    const options = {
-      hostname: 'integrate.api.nvidia.com',
-      port: 443,
-      path: '/v1/chat/completions',
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`,
-        'Content-Length': Buffer.byteLength(postData)
-      }
-    };
-
-    const clientReq = https.request(options, (clientRes) => {
-      let body = '';
-      clientRes.on('data', (chunk) => body += chunk);
-      clientRes.on('end', () => {
-        try {
-          if (clientRes.statusCode >= 200 && clientRes.statusCode < 300) {
-            const data = JSON.parse(body);
-            let content = data.choices[0].message.content || "";
-            // Clean thinking tags if present in output text
-            content = content.replace(/<thinking>[\s\S]*?<\/thinking>/gi, "");
-            res.json({ success: true, content: content.trim() });
-          } else {
-            res.status(clientRes.statusCode).json({ 
-              success: false, 
-              error: `NVIDIA API responded with status ${clientRes.statusCode}`,
-              details: body
-            });
-          }
-        } catch (e) {
-          res.status(500).json({ success: false, error: "Error parsing NVIDIA API response", details: e.message });
-        }
+        body: JSON.stringify({
+          model: "nvidia/llama-3.1-nemotron-70b-instruct",
+          messages: messages,
+          temperature: 0.5,
+          top_p: 0.95,
+          max_tokens: 1024,
+          stream: false
+        })
       });
-    });
 
-    clientReq.on('error', (e) => {
-      res.status(500).json({ success: false, error: "NVIDIA proxy request failed", details: e.message });
-    });
+      const data = await response.json();
+      
+      if (response.ok) {
+        let content = data.choices[0].message.content || "";
+        return res.json({ success: true, content: content.trim() });
+      } else {
+        throw new Error(`Primary failed with status ${response.status}`);
+      }
+    } catch (err) {
+      console.warn("Primary model failed or threw error. Trying fallback...");
+      try {
+        // 2. Fallback to Ministral 8B
+        const fallbackResponse = await fetch('https://integrate.api.nvidia.com/v1/chat/completions', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${apiKey}`
+          },
+          body: JSON.stringify({
+            model: "mistralai/ministral-8b-instruct",
+            messages: messages,
+            temperature: 0.5,
+            top_p: 0.95,
+            max_tokens: 1024,
+            stream: false
+          })
+        });
 
-    clientReq.write(postData);
-    clientReq.end();
-
+        const fallbackData = await fallbackResponse.json();
+        
+        if (fallbackResponse.ok) {
+          let content = fallbackData.choices[0].message.content || "";
+          return res.json({ success: true, content: content.trim() });
+        } else {
+          return res.status(fallbackResponse.status).json({
+            success: false,
+            error: "Both models failed.",
+            details: fallbackData
+          });
+        }
+      } catch (fallbackErr) {
+        return res.status(500).json({
+          success: false,
+          error: "NVIDIA proxy request failed entirely",
+          details: fallbackErr.message
+        });
+      }
+    }
   } else if (provider === 'gemini') {
     // Call Google Gemini 1.5 Flash
     const key = geminiKey || "";

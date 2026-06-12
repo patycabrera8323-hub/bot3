@@ -45,12 +45,12 @@
       <div style="text-align: center; margin-bottom: 24px;">
         <i class="bx bx-cylinder" style="font-size: 3.5rem; color: var(--color-primary); text-shadow: 0 0 10px var(--color-primary-glow);"></i>
         <h1 style="font-size: 1.8rem; margin-top: 10px;">Inicializador de Base de Datos</h1>
-        <p style="color: var(--text-muted); font-size: 0.9rem; margin-top: 4px;">Crea la estructura multi-restaurante en tu Firebase Firestore</p>
+        <p style="color: var(--text-muted); font-size: 0.9rem; margin-top: 4px;">Crea la estructura de colecciones en tu Firebase Firestore (mi-local-2ac9f)</p>
       </div>
 
       <div class="alert-info-box" style="margin-bottom: 20px;">
         <i class="bx bx-info-circle"></i>
-        <p>Este script creará las colecciones de <strong>restaurantes</strong> (Burger Shack, Pizza Napolitana, Sushi Zen), sus respectivos <strong>productos</strong> con identificadores de restaurante vinculados, y los roles de <strong>usuarios</strong> (configurando jicr1200@gmail.com como Administrador de Burger Shack).</p>
+        <p>Este script creará las colecciones de <strong>users</strong>, <strong>businesses</strong> y las subcolecciones de <strong>products</strong> para el proyecto de base de datos <strong>ai-studio-d3ccc3e7-3fa0-4dee-a0d6-338edf0f7c53</strong>.</p>
       </div>
 
       <div style="display: flex; gap: 12px; justify-content: center;">
@@ -94,146 +94,203 @@
       log("Iniciando semillero de base de datos...", "info");
 
       try {
-        // --- 1. SEED RESTAURANTS ---
-        log("Creando colección 'restaurantes'...", "info");
-        
-        const restaurants = {
-          "burger-shack": {
-            name: "Burger Shack",
-            logo: "https://images.unsplash.com/photo-1568901346375-23c9450c58cd?auto=format&fit=crop&w=80&q=80",
-            address: "Av. Gourmet 123",
-            phone: "+54 9 11 1234 5678",
-            schedule: "Mar - Dom, 12:00 a 23:00"
-          },
-          "pizza-napolitana": {
-            name: "Pizza Napolitana",
-            logo: "https://images.unsplash.com/photo-1628840042765-356cda07504e?auto=format&fit=crop&w=80&q=80",
-            address: "Vía Italia 456",
-            phone: "+54 9 11 8765 4321",
-            schedule: "Mar - Dom, 12:00 a 23:00"
-          },
-          "sushi-zen": {
-            name: "Sushi Zen",
-            logo: "https://images.unsplash.com/photo-1579871494447-9811cf80d66c?auto=format&fit=crop&w=80&q=80",
-            address: "Calle Kioto 789",
-            phone: "+54 9 11 5555 9999",
-            schedule: "Mié - Lun, 13:00 a 23:30"
-          }
-        };
-
-        for (const [id, data] of Object.entries(restaurants)) {
-          await setDoc(doc(db, "restaurantes", id), data);
-          log(`Restaurante '${data.name}' creado con ID: ${id}`, "success");
-        }
-
-        // --- 2. SEED PRODUCTS ---
-        log("Creando colección 'productos' vinculados a restaurantes...", "info");
-        
-        const productsList = {
-          // Products for Burger Shack
-          "prod-bs-1": {
-            name: "Hamburguesa Double Smash",
-            category: "comida",
-            price: 12.00,
-            restaurantId: "burger-shack",
-            img: "https://images.unsplash.com/photo-1568901346375-23c9450c58cd?auto=format&fit=crop&w=500&q=80",
-            desc: "Doble carne premium (120g c/u), queso cheddar derretido, cebolla caramelizada y salsa especial."
-          },
-          "prod-bs-2": {
-            name: "Papas Fritas Trufa & Queso",
-            category: "comida",
-            price: 6.50,
-            restaurantId: "burger-shack",
-            img: "https://images.unsplash.com/photo-1573080496219-bb080dd4f877?auto=format&fit=crop&w=500&q=80",
-            desc: "Papas crujientes con aceite de trufa blanca, parmesano rallado y perejil fresco."
-          },
-          "prod-bs-3": {
-            name: "Milkshake de Oreo",
-            category: "postre",
-            price: 4.50,
-            restaurantId: "burger-shack",
-            img: "https://images.unsplash.com/photo-1572490122747-3968b75cc699?auto=format&fit=crop&w=500&q=80",
-            desc: "Delicioso batido espeso de vainilla triturado con galletas Oreo originales y crema batida."
-          },
-
-          // Products for Pizza Napolitana
-          "prod-pn-1": {
-            name: "Pizza Pepperoni Suprema",
-            category: "comida",
-            price: 14.50,
-            restaurantId: "pizza-napolitana",
-            img: "https://images.unsplash.com/photo-1628840042765-356cda07504e?auto=format&fit=crop&w=500&q=80",
-            desc: "Masa artesanal delgada, abundante queso mozzarella y pepperoni curado de alta calidad."
-          },
-          "prod-pn-2": {
-            name: "Coca-Cola Zero Lata",
-            category: "bebida",
-            price: 2.00,
-            restaurantId: "pizza-napolitana",
-            img: "https://images.unsplash.com/photo-1622483767028-3f66f32aef97?auto=format&fit=crop&w=500&q=80",
-            desc: "Lata de Coca-Cola Zero calorías de 354ml servida bien fría."
-          },
-          "prod-pn-3": {
-            name: "Tiramisú de la Casa",
-            category: "postre",
-            price: 5.50,
-            restaurantId: "pizza-napolitana",
-            img: "https://images.unsplash.com/photo-1571877227200-a0d98ea607e9?auto=format&fit=crop&w=500&q=80",
-            desc: "Postre italiano clásico elaborado con capas de bizcocho soletilla remojado en café expresso, mascarpone y cacao."
-          },
-
-          // Products for Sushi Zen
-          "prod-sz-1": {
-            name: "Sushi Roll Filadelfia (10 piezas)",
-            category: "comida",
-            price: 11.00,
-            restaurantId: "sushi-zen",
-            img: "https://images.unsplash.com/photo-1579871494447-9811cf80d66c?auto=format&fit=crop&w=500&q=80",
-            desc: "Salmón fresco, queso crema Filadelfia y aguacate por dentro, cubierto de ajonjolí tostado."
-          },
-          "prod-sz-2": {
-            name: "Té Verde Matcha Orgánico",
-            category: "bebida",
-            price: 3.00,
-            restaurantId: "sushi-zen",
-            img: "https://images.unsplash.com/photo-1536256263959-770b48d82b0a?auto=format&fit=crop&w=500&q=80",
-            desc: "Té verde caliente preparado al estilo tradicional japonés con polvo de matcha puro."
-          }
-        };
-
-        for (const [id, data] of Object.entries(productsList)) {
-          await setDoc(doc(db, "productos", id), data);
-          log(`Producto '${data.name}' creado y asociado a restaurante ID: ${data.restaurantId}`, "success");
-        }
-
-        // --- 3. SEED USERS / ADMINS ---
-        log("Creando colección 'usuarios' para roles...", "info");
+        // --- 1. SEED USERS / ADMINS ---
+        log("Creando colección 'users' para roles...", "info");
         
         const usersList = {
           "admin-super": {
             email: "searmoco@gmail.com",
             role: "admin",
-            restaurantId: "all"
+            restaurantId: "all",
+            createdAt: Date.now()
           },
           "admin-shack": {
             email: "jicr1200@gmail.com",
-            role: "admin",
-            restaurantId: "burger-shack"
+            role: "owner",
+            name: "Javier Cabrera",
+            phone: "+54 9 11 1234 5678",
+            payment_verified: true,
+            createdAt: Date.now()
           },
           "repartidor-1": {
             email: "reparto@nexus.com",
             role: "repartidor",
-            restaurantId: "burger-shack"
+            restaurantId: "burger-shack",
+            createdAt: Date.now()
           }
         };
 
         for (const [id, data] of Object.entries(usersList)) {
-          await setDoc(doc(db, "usuarios", id), data);
-          log(`Usuario '${data.email}' creado con rol: ${data.role} para restaurante: ${data.restaurantId}`, "success");
+          await setDoc(doc(db, "users", id), data);
+          log(`Usuario '${data.email}' creado con rol: ${data.role} para negocio: ${data.restaurantId || 'shack'}`, "success");
+        }
+
+        // --- 2. SEED BUSINESSES ---
+        log("Creando colección 'businesses'...", "info");
+        
+        const businesses = {
+          "burger-shack": {
+            ownerId: "admin-shack",
+            name: "Burger Shack",
+            description: "Las mejores hamburguesas gourmet smash y papas fritas trufadas.",
+            category: "COMIDA",
+            isOpen: true,
+            phone: "+54 9 11 1234 5678",
+            address: "Av. Gourmet 123",
+            deliveryArea: "Centro",
+            minDeliveryAmount: "10.00",
+            paymentMethod: "Efectivo, Tarjeta",
+            schedule: "Mar - Dom, 12:00 a 23:00",
+            logoUrl: "https://images.unsplash.com/photo-1568901346375-23c9450c58cd?auto=format&fit=crop&w=80&q=80",
+            createdAt: Date.now()
+          },
+          "pizza-napolitana": {
+            ownerId: "owner-pizza",
+            name: "Pizza Napolitana",
+            description: "Pizzas artesanales cocinadas al horno de leña estilo napolitano.",
+            category: "COMIDA",
+            isOpen: true,
+            phone: "+54 9 11 8765 4321",
+            address: "Vía Italia 456",
+            deliveryArea: "Norte",
+            minDeliveryAmount: "12.00",
+            paymentMethod: "Efectivo, Transferencia",
+            schedule: "Mar - Dom, 12:00 a 23:00",
+            logoUrl: "https://images.unsplash.com/photo-1628840042765-356cda07504e?auto=format&fit=crop&w=80&q=80",
+            createdAt: Date.now()
+          },
+          "sushi-zen": {
+            ownerId: "owner-sushi",
+            name: "Sushi Zen",
+            description: "Rolls de sushi premium, sashimi fresco y platos calientes japoneses.",
+            category: "COMIDA",
+            isOpen: true,
+            phone: "+54 9 11 5555 9999",
+            address: "Calle Kioto 789",
+            deliveryArea: "Sur",
+            minDeliveryAmount: "15.00",
+            paymentMethod: "Transferencia, Tarjeta",
+            schedule: "Mié - Lun, 13:00 a 23:30",
+            logoUrl: "https://images.unsplash.com/photo-1579871494447-9811cf80d66c?auto=format&fit=crop&w=80&q=80",
+            createdAt: Date.now()
+          }
+        };
+
+        for (const [id, data] of Object.entries(businesses)) {
+          await setDoc(doc(db, "businesses", id), data);
+          log(`Negocio '${data.name}' creado con ID: ${id}`, "success");
+        }
+
+        // --- 3. SEED PRODUCTS AS SUBCOLLECTIONS ---
+        log("Creando subcolecciones 'products' bajo cada business...", "info");
+        
+        const productsList = {
+          "burger-shack": [
+            {
+              id: "prod-bs-1",
+              name: "Hamburguesa Double Smash",
+              description: "Doble carne premium (120g c/u), queso cheddar derretido, cebolla caramelizada y salsa especial.",
+              price: 12.00,
+              isAvailable: true,
+              imageUrl: "https://images.unsplash.com/photo-1568901346375-23c9450c58cd?auto=format&fit=crop&w=500&q=80",
+              views: 0,
+              category: "comida",
+              createdAt: Date.now()
+            },
+            {
+              id: "prod-bs-2",
+              name: "Papas Fritas Trufa & Queso",
+              description: "Papas crujientes con aceite de trufa blanca, parmesano rallado y perejil fresco.",
+              price: 6.50,
+              isAvailable: true,
+              imageUrl: "https://images.unsplash.com/photo-1573080496219-bb080dd4f877?auto=format&fit=crop&w=500&q=80",
+              views: 0,
+              category: "comida",
+              createdAt: Date.now()
+            },
+            {
+              id: "prod-bs-3",
+              name: "Milkshake de Oreo",
+              description: "Delicioso batido espeso de vainilla triturado con galletas Oreo originales y crema batida.",
+              price: 4.50,
+              isAvailable: true,
+              imageUrl: "https://images.unsplash.com/photo-1572490122747-3968b75cc699?auto=format&fit=crop&w=500&q=80",
+              views: 0,
+              category: "postre",
+              createdAt: Date.now()
+            }
+          ],
+          "pizza-napolitana": [
+            {
+              id: "prod-pn-1",
+              name: "Pizza Pepperoni Suprema",
+              description: "Masa artesanal delgada, abundante queso mozzarella y pepperoni curado de alta calidad.",
+              price: 14.50,
+              isAvailable: true,
+              imageUrl: "https://images.unsplash.com/photo-1628840042765-356cda07504e?auto=format&fit=crop&w=500&q=80",
+              views: 0,
+              category: "comida",
+              createdAt: Date.now()
+            },
+            {
+              id: "prod-pn-2",
+              name: "Coca-Cola Zero Lata",
+              description: "Lata de Coca-Cola Zero calorías de 354ml servida bien fría.",
+              price: 2.00,
+              isAvailable: true,
+              imageUrl: "https://images.unsplash.com/photo-1622483767028-3f66f32aef97?auto=format&fit=crop&w=500&q=80",
+              views: 0,
+              category: "bebida",
+              createdAt: Date.now()
+            },
+            {
+              id: "prod-pn-3",
+              name: "Tiramisú de la Casa",
+              description: "Postre italiano clásico elaborado con capas de bizcocho soletilla remojado en café expresso, mascarpone y cacao.",
+              price: 5.50,
+              isAvailable: true,
+              imageUrl: "https://images.unsplash.com/photo-1571877227200-a0d98ea607e9?auto=format&fit=crop&w=500&q=80",
+              views: 0,
+              category: "postre",
+              createdAt: Date.now()
+            }
+          ],
+          "sushi-zen": [
+            {
+              id: "prod-sz-1",
+              name: "Sushi Roll Filadelfia (10 piezas)",
+              description: "Salmón fresco, queso crema Filadelfia y aguacate por dentro, cubierto de ajonjolí tostado.",
+              price: 11.00,
+              isAvailable: true,
+              imageUrl: "https://images.unsplash.com/photo-1579871494447-9811cf80d66c?auto=format&fit=crop&w=500&q=80",
+              views: 0,
+              category: "comida",
+              createdAt: Date.now()
+            },
+            {
+              id: "prod-sz-2",
+              name: "Té Verde Matcha Orgánico",
+              description: "Té verde caliente preparado al estilo tradicional japonés con polvo de matcha puro.",
+              price: 3.00,
+              isAvailable: true,
+              imageUrl: "https://images.unsplash.com/photo-1536256263959-770b48d82b0a?auto=format&fit=crop&w=500&q=80",
+              views: 0,
+              category: "bebida",
+              createdAt: Date.now()
+            }
+          ]
+        };
+
+        for (const [businessId, products] of Object.entries(productsList)) {
+          for (const prod of products) {
+            const { id, ...data } = prod;
+            await setDoc(doc(db, "businesses", businessId, "products", id), data);
+            log(`Producto '${data.name}' creado bajo subcolección de negocio: ${businessId}`, "success");
+          }
         }
 
         log("¡BASE DE DATOS INICIALIZADA CON ÉXITO! 🎉", "success");
-        log("Ya puedes recargar tus páginas para ver la sincronización multi-tienda.", "success");
+        log("Ya puedes recargar tus páginas para probar la sincronización.", "success");
 
       } catch (error) {
         log(`ERROR AL INICIALIZAR LA BASE DE DATOS: ${error.message}`, "error");

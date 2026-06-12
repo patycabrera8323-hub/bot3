@@ -1,6 +1,7 @@
 /* ==========================================
    NEXUS AI - CLOUDFLARE PAGES CHAT FUNCTION
    Proxies /api/chat calls to NVIDIA / Gemini
+   Includes automatic fallback to Ministral 8B if Llama 3.1 Nemotron 70B fails
    ========================================== */
 
 export async function onRequestPost(context) {
@@ -16,46 +17,72 @@ export async function onRequestPost(context) {
     const apiKeyGemini = geminiKey || env.GEMINI_API_KEY;
 
     if (provider === 'nvidia') {
-      const response = await fetch('https://integrate.api.nvidia.com/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${apiKeyNvidia}`
-        },
-        body: JSON.stringify({
-          model: "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning",
-          messages: messages,
-          temperature: 0.6,
-          top_p: 0.95,
-          max_tokens: 1024,
-          extra_body: {
-            chat_template_kwargs: {
-              enable_thinking: true
-            },
-            reasoning_budget: 1024
+      // 1. Try Llama 3.1 Nemotron 70B first
+      try {
+        console.log("Attempting call to primary model: nvidia/llama-3.1-nemotron-70b-instruct");
+        const response = await fetch('https://integrate.api.nvidia.com/v1/chat/completions', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${apiKeyNvidia}`
           },
-          stream: false
-        })
-      });
+          body: JSON.stringify({
+            model: "nvidia/llama-3.1-nemotron-70b-instruct",
+            messages: messages,
+            temperature: 0.5,
+            top_p: 0.95,
+            max_tokens: 1024,
+            stream: false
+          })
+        });
 
-      const data = await response.json();
-      
-      if (response.ok) {
-        let content = data.choices[0].message.content || "";
-        // Clean thinking tags if present in output text
-        content = content.replace(/<thinking>[\s\S]*?<\/thinking>/gi, "");
-        return new Response(JSON.stringify({ success: true, content: content.trim() }), {
-          headers: { 'Content-Type': 'application/json' }
+        const data = await response.json();
+        
+        if (response.ok) {
+          let content = data.choices[0].message.content || "";
+          return new Response(JSON.stringify({ success: true, content: content.trim() }), {
+            headers: { 'Content-Type': 'application/json' }
+          });
+        } else {
+          console.warn("Primary model Llama 3.1 Nemotron 70B failed with status: " + response.status + ". Trying fallback model...");
+          throw new Error("Primary failed");
+        }
+      } catch (err) {
+        // 2. Fallback to Ministral 8B
+        console.log("Attempting call to backup model: mistralai/ministral-8b-instruct");
+        const fallbackResponse = await fetch('https://integrate.api.nvidia.com/v1/chat/completions', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${apiKeyNvidia}`
+          },
+          body: JSON.stringify({
+            model: "mistralai/ministral-8b-instruct",
+            messages: messages,
+            temperature: 0.5,
+            top_p: 0.95,
+            max_tokens: 1024,
+            stream: false
+          })
         });
-      } else {
-        return new Response(JSON.stringify({ 
-          success: false, 
-          error: `NVIDIA API responded with status ${response.status}`,
-          details: JSON.stringify(data)
-        }), {
-          status: response.status,
-          headers: { 'Content-Type': 'application/json' }
-        });
+
+        const fallbackData = await fallbackResponse.json();
+        
+        if (fallbackResponse.ok) {
+          let content = fallbackData.choices[0].message.content || "";
+          return new Response(JSON.stringify({ success: true, content: content.trim() }), {
+            headers: { 'Content-Type': 'application/json' }
+          });
+        } else {
+          return new Response(JSON.stringify({ 
+            success: false, 
+            error: `Both models failed. Backup Ministral 8B responded with status ${fallbackResponse.status}`,
+            details: JSON.stringify(fallbackData)
+          }), {
+            status: fallbackResponse.status,
+            headers: { 'Content-Type': 'application/json' }
+          });
+        }
       }
 
     } else if (provider === 'gemini') {

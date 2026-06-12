@@ -1,8 +1,9 @@
 /* ==========================================
-   NEXUS AI - CONFIGURACIÓN DE FIREBASE
+   NEXUS AI - FIREBASE CONFIGURATION
+   Connects to Firebase Project 'mi-local-2ac9f'
+   using database ID 'ai-studio-d3ccc3e7-3fa0-4dee-a0d6-338edf0f7c53'
    ========================================== */
 
-// Importamos Firebase SDK desde CDN para uso en el navegador
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
 import { 
   getFirestore, 
@@ -20,42 +21,28 @@ import {
   orderBy 
 } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
-// =========================================================================
-// ⚠️ REEMPLAZA ESTE OBJETO CON TUS CREDENCIALES DE TU PROYECTO "bot nuevo"
-// =========================================================================
-// Instrucciones para obtener tus credenciales:
-// 1. Ve a tu consola de Firebase (https://console.firebase.google.com/)
-// 2. Selecciona tu proyecto "bot nuevo" (cuenta jicr1200@gmail.com).
-// 3. En la pantalla de inicio del proyecto, haz clic en el icono "</>" (Web).
-// 4. Escribe un alias para tu aplicación (ej. "nexus-pwa") y haz clic en "Registrar app".
-// 5. Verás un código con un objeto "firebaseConfig". Copia los valores y pégalos aquí abajo:
 const firebaseConfig = {
-  apiKey: "AIzaSyCy11ISYlKFtDF21sgeMnDSJ6GvLC5IzUo",
-  authDomain: "bot-nuevo-bdf67.firebaseapp.com",
-  projectId: "bot-nuevo-bdf67",
-  storageBucket: "bot-nuevo-bdf67.firebasestorage.app",
-  messagingSenderId: "124378699288",
-  appId: "1:124378699288:web:de728dc8b1f4c32aba156d",
-  measurementId: "G-NQ6YR56BXE"
+  apiKey: "AIzaSyDxR5T2FPw32-NhhcwRwXpANJDV1nYq2E0",
+  authDomain: "mi-local-2ac9f.firebaseapp.com",
+  projectId: "mi-local-2ac9f",
+  storageBucket: "mi-local-2ac9f.firebasestorage.app",
+  messagingSenderId: "760341600295",
+  appId: "1:760341600295:web:d3d6406752fdfb6cf75602",
+  firestoreDatabaseId: "ai-studio-d3ccc3e7-3fa0-4dee-a0d6-338edf0f7c53",
+  measurementId: ""
 };
-// =========================================================================
 
 let app;
 let db;
 let isFirebaseEnabled = false;
 
-// Comprobamos si se ha configurado la API Key real
-if (firebaseConfig.apiKey && firebaseConfig.apiKey !== "TU_API_KEY_AQUI") {
-  try {
-    app = initializeApp(firebaseConfig);
-    db = getFirestore(app);
-    isFirebaseEnabled = true;
-    console.log("🔥 Firebase conectado con éxito! Realizando sincronización en tiempo real.");
-  } catch (error) {
-    console.error("❌ Error al inicializar Firebase:", error);
-  }
-} else {
-  console.log("💡 Firebase no está configurado aún. Utilizando base de datos local de respaldo (localStorage).");
+try {
+  app = initializeApp(firebaseConfig);
+  db = getFirestore(app, firebaseConfig.firestoreDatabaseId); // Non-default database instance
+  isFirebaseEnabled = true;
+  console.log("🔥 Connected to Firebase Firestore database: " + firebaseConfig.firestoreDatabaseId);
+} catch (error) {
+  console.error("❌ Error initializing Firebase:", error);
 }
 
 export { 

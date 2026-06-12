@@ -56,7 +56,7 @@ function initApp() {
 // Sync products catalog in real-time (from Firebase if enabled, otherwise local)
 function syncProductsData() {
   if (isFirebaseEnabled) {
-    const q = query(collection(db, "productos"));
+    const q = query(collection(db, "businesses", "burger-shack", "products"));
     onSnapshot(q, (snapshot) => {
       const fbProducts = [];
       snapshot.forEach((doc) => {
@@ -306,7 +306,7 @@ async function handleUserMessageSend() {
   DOM.chatInput.value = "";
   appendChatMessage("user", text);
   
-  const catalogText = products.map(p => `- ${p.name} ($${p.price.toFixed(2)}): ${p.desc}`).join("\n");
+  const catalogText = products.map(p => `- ${p.name} ($${p.price.toFixed(2)}): ${p.description || p.desc || ""}`).join("\n");
   const systemPrompt = `Eres Nexus AI, un bot híbrido inteligente en español de toma de pedidos para un restaurante o negocio local.
 NUESTRO CATÁLOGO ACTUAL DE PRODUCTOS:
 ${catalogText}

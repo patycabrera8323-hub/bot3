@@ -1,6 +1,7 @@
 /* ==========================================
    NEXUS AI - ADMIN APP LOGIC
    Supports Role-Based Access Control and Multi-Restaurant Management
+   aligned with the 'admin negocios' Firebase Firestore structure
    ========================================== */
 
 import { 
@@ -20,8 +21,8 @@ import {
 
 // --- INITIAL STATE ---
 const DEFAULT_PRODUCTS = [
-  { id: "prod-bs-1", name: "Hamburguesa Double Smash", category: "comida", price: 12.00, img: "https://images.unsplash.com/photo-1568901346375-23c9450c58cd?auto=format&fit=crop&w=500&q=80", desc: "Doble carne premium (120g c/u), cheddar derretido, cebolla caramelizada, pepinillos y salsa de la casa.", restaurantId: "burger-shack" },
-  { id: "prod-pn-1", name: "Pizza Pepperoni Suprema", category: "comida", price: 14.50, img: "https://images.unsplash.com/photo-1628840042765-356cda07504e?auto=format&fit=crop&w=500&q=80", desc: "Masa artesanal delgada con salsa napolitana, mozzarella, pepperoni y orégano.", restaurantId: "pizza-napolitana" }
+  { id: "prod-bs-1", name: "Hamburguesa Double Smash", category: "comida", price: 12.00, imageUrl: "https://images.unsplash.com/photo-1568901346375-23c9450c58cd?auto=format&fit=crop&w=500&q=80", description: "Doble carne premium (120g c/u), cheddar derretido, cebolla caramelizada, pepinillos y salsa de la casa.", isAvailable: true, restaurantId: "burger-shack" },
+  { id: "prod-pn-1", name: "Pizza Pepperoni Suprema", category: "comida", price: 14.50, imageUrl: "https://images.unsplash.com/photo-1628840042765-356cda07504e?auto=format&fit=crop&w=500&q=80", description: "Masa artesanal delgada con salsa napolitana, mozzarella, pepperoni y orégano.", isAvailable: true, restaurantId: "pizza-napolitana" }
 ];
 
 let products = [];
@@ -78,7 +79,7 @@ document.addEventListener("DOMContentLoaded", () => {
   setupLoginHandler();
 });
 
-// Setup Verification Logic (Super Admin vs Business Owner)
+// Setup Verification Logic (Super Admin vs Business Owner) using 'users' collection
 function setupLoginHandler() {
   DOM.formLogin.addEventListener("submit", async (e) => {
     e.preventDefault();
@@ -89,7 +90,7 @@ function setupLoginHandler() {
 
     if (isFirebaseEnabled) {
       try {
-        const q = query(collection(db, "usuarios"), where("email", "==", email));
+        const q = query(collection(db, "users"), where("email", "==", email));
         const querySnapshot = await getDocs(q);
         
         if (querySnapshot.empty) {
@@ -101,10 +102,15 @@ function setupLoginHandler() {
         let isAuthorized = false;
         querySnapshot.forEach((docSnap) => {
           const u = docSnap.data();
-          if (u.role === "admin") {
+          if (u.role === "admin" || u.role === "owner") {
             isAuthorized = true;
-            userRole = "admin";
+            userRole = u.role;
+            // Map owner directly to their specified restaurantId, or fallback to doc ID if they are business specific
             allowedRestaurantId = u.restaurantId || "all";
+            if (u.role === "owner" && allowedRestaurantId === "all") {
+              // Lock to the doc ID if it's the owner account
+              allowedRestaurantId = docSnap.id === "admin-shack" ? "burger-shack" : docSnap.id;
+            }
           }
         });
 
@@ -128,7 +134,7 @@ function setupLoginHandler() {
         DOM.modalLogin.classList.remove("active");
         startAdminConsole();
       } else if (email === "jicr1200@gmail.com") {
-        userRole = "admin";
+        userRole = "owner";
         allowedRestaurantId = "burger-shack";
         DOM.modalLogin.classList.remove("active");
         startAdminConsole();
@@ -145,11 +151,11 @@ function startAdminConsole() {
   loadRestaurants();
 }
 
-// Load list of restaurants to populate dropdown
+// Load list of restaurants (businesses) to populate dropdown
 async function loadRestaurants() {
   if (isFirebaseEnabled) {
     try {
-      const q = query(collection(db, "restaurantes"));
+      const q = query(collection(db, "businesses"));
       const querySnapshot = await getDocs(q);
       DOM.adminRestaurantSelect.innerHTML = "";
       
@@ -226,11 +232,11 @@ function onRestaurantChanged() {
   loadAdminOrders();
 }
 
-// Load restaurant metadata into config form fields
+// Load restaurant metadata into config form fields from 'businesses'
 async function loadRestaurantMetadata() {
   if (isFirebaseEnabled) {
     try {
-      const q = query(collection(db, "restaurantes"));
+      const q = query(collection(db, "businesses"));
       onSnapshot(q, (snapshot) => {
         snapshot.forEach((docSnap) => {
           if (docSnap.id === currentRestaurantId) {
@@ -239,7 +245,7 @@ async function loadRestaurantMetadata() {
             DOM.restPhone.value = data.phone || "";
             DOM.restSchedule.value = data.schedule || "";
             DOM.restAddress.value = data.address || "";
-            DOM.restLogo.value = data.logo || "";
+            DOM.restLogo.value = data.logoUrl || ""; // mapped to logoUrl
           }
         });
       });
@@ -253,17 +259,17 @@ async function loadRestaurantMetadata() {
       phone: "+54 9 11 1234 5678",
       schedule: "Mar - Dom, 12:00 a 23:00",
       address: "Dirección de demostración",
-      logo: ""
+      logoUrl: ""
     };
     DOM.restName.value = restData.name;
     DOM.restPhone.value = restData.phone;
     DOM.restSchedule.value = restData.schedule;
     DOM.restAddress.value = restData.address;
-    DOM.restLogo.value = restData.logo;
+    DOM.restLogo.value = restData.logoUrl || "";
   }
 }
 
-// Save restaurant metadata
+// Save restaurant metadata back to 'businesses'
 async function handleRestaurantConfigSubmit(e) {
   e.preventDefault();
   
@@ -271,33 +277,33 @@ async function handleRestaurantConfigSubmit(e) {
   const phone = DOM.restPhone.value.trim();
   const schedule = DOM.restSchedule.value.trim();
   const address = DOM.restAddress.value.trim();
-  const logo = DOM.restLogo.value.trim();
+  const logoUrl = DOM.restLogo.value.trim();
   
-  const restData = { name, phone, schedule, address, logo };
+  const restData = { name, phone, schedule, address, logoUrl };
 
   if (isFirebaseEnabled) {
     try {
-      const docRef = doc(db, "restaurantes", currentRestaurantId);
+      const docRef = doc(db, "businesses", currentRestaurantId);
       await updateDoc(docRef, restData);
-      alert("¡Configuración del restaurante guardada con éxito!");
+      alert("¡Configuración del negocio guardada con éxito!");
     } catch (err) {
-      console.error("Error updating restaurant config:", err);
+      console.error("Error updating business config:", err);
       alert(`Error al guardar configuración: ${err.message}`);
     }
   } else {
     localStorage.setItem(`nexus_rest_config_${currentRestaurantId}`, JSON.stringify(restData));
-    alert("¡Configuración guardada localmente de forma temporal!");
+    alert("¡Configuración guardada localmente!");
   }
 }
 
-// Load products filtered by restaurantId
+// Load products from subcollection: businesses/{currentRestaurantId}/products
 function loadAdminProducts() {
   if (productsUnsubscribe) {
     productsUnsubscribe();
   }
 
   if (isFirebaseEnabled) {
-    const q = query(collection(db, "productos"), where("restaurantId", "==", currentRestaurantId));
+    const q = query(collection(db, "businesses", currentRestaurantId, "products"));
     productsUnsubscribe = onSnapshot(q, (snapshot) => {
       const fbProducts = [];
       snapshot.forEach((doc) => {
@@ -308,21 +314,21 @@ function loadAdminProducts() {
       renderAdminProductsList();
     });
   } else {
-    // Local fallback: filter stored products by active restaurantId
+    // Local fallback
     const allProducts = JSON.parse(localStorage.getItem("nexus_products")) || DEFAULT_PRODUCTS;
     products = allProducts.filter(p => p.restaurantId === currentRestaurantId);
     renderAdminProductsList();
   }
 }
 
-// Load orders filtered by restaurantId
+// Load orders from 'orders' collection where storeId == currentRestaurantId
 function loadAdminOrders() {
   if (ordersUnsubscribe) {
     ordersUnsubscribe();
   }
 
   if (isFirebaseEnabled) {
-    const q = query(collection(db, "pedidos"), where("restaurantId", "==", currentRestaurantId));
+    const q = query(collection(db, "orders"), where("storeId", "==", currentRestaurantId));
     ordersUnsubscribe = onSnapshot(q, (snapshot) => {
       const fbOrders = [];
       snapshot.forEach((doc) => {
@@ -350,14 +356,15 @@ function renderAdminProductsList() {
   
   products.forEach(p => {
     const tr = document.createElement("tr");
-    const imgUrl = p.img || "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&w=100&q=80";
+    const imgUrl = p.imageUrl || p.img || "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&w=100&q=80";
+    const descText = p.description || p.desc || "";
     
     tr.innerHTML = `
       <td><img src="${imgUrl}" alt="${p.name}" class="admin-table-img" onerror="this.src='https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&w=100&q=80'"></td>
       <td style="font-weight:600; color:var(--text-main);">${p.name}</td>
-      <td><span class="status-badge status-badge-preparing" style="margin-bottom:0; font-size:0.68rem;">${p.category}</span></td>
+      <td><span class="status-badge status-badge-preparing" style="margin-bottom:0; font-size:0.68rem;">${p.category || 'comida'}</span></td>
       <td style="font-family:var(--font-mono); font-weight:700; color:var(--color-success);">$${p.price.toFixed(2)}</td>
-      <td style="max-width:240px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; font-size:0.78rem;">${p.desc || ''}</td>
+      <td style="max-width:240px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; font-size:0.78rem;">${descText}</td>
       <td>
         <div class="admin-actions">
           <button class="secondary-btn btn-icon-only edit-prod-btn" data-id="${p.id}" title="Editar"><i class="bx bx-edit"></i></button>
@@ -438,7 +445,7 @@ function renderOrderAdminActions(order) {
 async function advanceOrderStatus(refId, nextStatus) {
   if (isFirebaseEnabled) {
     try {
-      const orderRef = doc(db, "pedidos", refId);
+      const orderRef = doc(db, "orders", refId);
       await updateDoc(orderRef, { status: nextStatus });
     } catch (e) {
       console.error("Error updating order in Firebase:", e);
@@ -464,10 +471,10 @@ function openProductFormModal(productId = null) {
     DOM.productModalTitle.innerText = "Editar Producto";
     DOM.prodId.value = prod.id;
     DOM.prodName.value = prod.name;
-    DOM.prodCategory.value = prod.category;
+    DOM.prodCategory.value = prod.category || "comida";
     DOM.prodPrice.value = prod.price;
-    DOM.prodImg.value = prod.img || "";
-    DOM.prodDesc.value = prod.desc || "";
+    DOM.prodImg.value = prod.imageUrl || prod.img || "";
+    DOM.prodDesc.value = prod.description || prod.desc || "";
   } else {
     DOM.productModalTitle.innerText = "Agregar Nuevo Producto";
     DOM.productForm.reset();
@@ -483,25 +490,27 @@ async function handleProductFormSubmit(e) {
   const name = DOM.prodName.value.trim();
   const category = DOM.prodCategory.value;
   const price = parseFloat(DOM.prodPrice.value);
-  const img = DOM.prodImg.value.trim();
-  const desc = DOM.prodDesc.value.trim();
+  const imageUrl = DOM.prodImg.value.trim();
+  const description = DOM.prodDesc.value.trim();
   
   const productData = { 
     name, 
     category, 
     price, 
-    img, 
-    desc,
-    restaurantId: currentRestaurantId // Associate automatically to active restaurant
+    imageUrl, // mapped to imageUrl
+    description, // mapped to description
+    isAvailable: true,
+    createdAt: Date.now()
   };
   
   if (isFirebaseEnabled) {
     try {
       if (id) {
-        const docRef = doc(db, "productos", id);
+        const docRef = doc(db, "businesses", currentRestaurantId, "products", id);
         await updateDoc(docRef, productData);
       } else {
-        await addDoc(collection(db, "productos"), productData);
+        const prodColRef = collection(db, "businesses", currentRestaurantId, "products");
+        await addDoc(prodColRef, productData);
       }
     } catch (e) {
       console.error("Error saving product to Firebase:", e);
@@ -513,11 +522,11 @@ async function handleProductFormSubmit(e) {
     if (id) {
       const index = allProducts.findIndex(p => p.id === id);
       if (index !== -1) {
-        allProducts[index] = { id, ...productData };
+        allProducts[index] = { id, ...productData, restaurantId: currentRestaurantId };
       }
     } else {
       const newId = "prod-" + Date.now();
-      allProducts.push({ id: newId, ...productData });
+      allProducts.push({ id: newId, ...productData, restaurantId: currentRestaurantId });
     }
     localStorage.setItem("nexus_products", JSON.stringify(allProducts));
     loadAdminProducts();
@@ -531,7 +540,7 @@ async function deleteProduct(productId) {
   
   if (isFirebaseEnabled) {
     try {
-      const docRef = doc(db, "productos", productId);
+      const docRef = doc(db, "businesses", currentRestaurantId, "products", productId);
       await deleteDoc(docRef);
     } catch (e) {
       console.error("Error deleting from Firebase:", e);
