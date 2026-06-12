@@ -57,8 +57,41 @@ app.post('/api/chat', async (req, res) => {
       }
     } catch (err) {
       console.warn("Primary model failed or threw error. Trying fallback...");
+      
+      // 2. Fallback A: Direct Mistral AI direct if process.env.MISTRAL_API_KEY is defined
+      const apiKeyMistral = process.env.MISTRAL_API_KEY;
+      if (apiKeyMistral) {
+        try {
+          console.log("Attempting direct Mistral AI call (ministral-8b-latest)...");
+          const response = await fetch('https://api.mistral.ai/v1/chat/completions', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${apiKeyMistral}`
+            },
+            body: JSON.stringify({
+              model: "ministral-8b-latest",
+              messages: messages,
+              temperature: 0.5,
+              max_tokens: 1024,
+              stream: false
+            })
+          });
+
+          const data = await response.json();
+          if (response.ok) {
+            let content = data.choices[0].message.content || "";
+            return res.json({ success: true, content: content.trim() });
+          } else {
+            throw new Error(`Direct Mistral failed with status ${response.status}`);
+          }
+        } catch (mistralErr) {
+          console.warn("Direct Mistral fallback failed. Trying NVIDIA Ministral 8B...");
+        }
+      }
+
+      // 3. Fallback B: NVIDIA Ministral 8B (using NVIDIA key)
       try {
-        // 2. Fallback to Ministral 8B
         const fallbackResponse = await fetch('https://integrate.api.nvidia.com/v1/chat/completions', {
           method: 'POST',
           headers: {
