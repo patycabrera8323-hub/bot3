@@ -2,7 +2,7 @@
    NEXUS AI - CLIENT CHATBOT INTERACTIVE SCRIPT
    ========================================== */
 
-import { db, isFirebaseEnabled, collection, onSnapshot, query } from './firebase-config.js';
+import { db, isFirebaseEnabled, collection, onSnapshot, query, getDocs } from './firebase-config.js';
 
 // --- INITIAL STATE & CONFIG ---
 const DEFAULT_PRODUCTS = [
@@ -53,20 +53,38 @@ function initApp() {
   checkIncomingOrderRedirects();
 }
 
-// Sync products catalog in real-time (from Firebase if enabled, otherwise local)
-function syncProductsData() {
+// Sync products catalog in real-time from ALL businesses in Firebase
+async function syncProductsData() {
   if (isFirebaseEnabled) {
-    const q = query(collection(db, "businesses", "burger-shack", "products"));
-    onSnapshot(q, (snapshot) => {
-      const fbProducts = [];
-      snapshot.forEach((doc) => {
-        fbProducts.push({ id: doc.id, ...doc.data() });
+    try {
+      // Map of bizId -> products[] for clean real-time tracking
+      const productsByBiz = {};
+
+      // 1. Get all businesses once
+      const businessesSnap = await getDocs(collection(db, "businesses"));
+
+      // 2. Subscribe to each business's products subcollection
+      businessesSnap.forEach((bizDoc) => {
+        const bizId = bizDoc.id;
+        const bizName = bizDoc.data().name || bizId;
+        productsByBiz[bizId] = [];
+
+        const q = query(collection(db, "businesses", bizId, "products"));
+        onSnapshot(q, (snapshot) => {
+          // Replace this business's products
+          productsByBiz[bizId] = [];
+          snapshot.forEach((doc) => {
+            productsByBiz[bizId].push({ id: doc.id, ...doc.data(), _bizId: bizId, _bizName: bizName });
+          });
+
+          // Merge all business products into global array
+          products = Object.values(productsByBiz).flat();
+          localStorage.setItem("nexus_products", JSON.stringify(products));
+        });
       });
-      if (fbProducts.length > 0) {
-        products = fbProducts;
-        localStorage.setItem("nexus_products", JSON.stringify(products));
-      }
-    });
+    } catch (err) {
+      console.error("Error syncing products from Firebase:", err);
+    }
   }
 }
 
@@ -106,19 +124,31 @@ function playNotificationSound() {
 
 // --- PARSE ORDERS RETURNING FROM PWA CATALOG ---
 function checkIncomingOrderRedirects() {
-  const urlParams = new URLSearchParams(window.location.search);
-  const orderCreated = urlParams.get("orderCreated");
-  
-  if (orderCreated === "true") {
-    const orderId = urlParams.get("orderId");
-    const name = urlParams.get("name");
-    const total = parseFloat(urlParams.get("total") || 0);
-    const address = urlParams.get("address");
-    const itemsRaw = urlParams.get("items") || "";
+  try {
+    const urlParams = new URLSearchParams(window.location.search);
+    const orderCreated = urlParams.get("orderCreated");
     
-    const items = itemsRaw ? JSON.parse(decodeURIComponent(itemsRaw)) : [];
+    if (orderCreated !== "true") return;
+
+    const orderId = urlParams.get("orderId") || "NEX-???";
+    const name = urlParams.get("name") || "Cliente";
+    const total = parseFloat(urlParams.get("total") || 0);
+    const address = urlParams.get("address") || "No especificada";
+    const itemsRaw = urlParams.get("items") || "[]";
+    
+    let items = [];
+    try {
+      items = JSON.parse(decodeURIComponent(itemsRaw));
+    } catch (parseErr) {
+      console.warn("Could not parse items from URL:", parseErr);
+      items = [];
+    }
     
     // 1. Build receipt HTML
+    const itemsHTML = items.length > 0
+      ? items.map(i => `<div>${i.qty}x ${i.name} ($${(parseFloat(i.price) * i.qty).toFixed(2)})</div>`).join('')
+      : "<div>Ver detalles del pedido</div>";
+
     const receiptHTML = `
       <div class="order-receipt">
         <h4><i class="bx bx-receipt"></i> Pedido Confirmado</h4>
@@ -127,7 +157,7 @@ function checkIncomingOrderRedirects() {
         <p><strong>Dirección:</strong> ${address}</p>
         <div class="receipt-divider"></div>
         <div style="font-size: 0.8rem; line-height: 1.4; color: var(--text-secondary);">
-          ${items.map(i => `<div>${i.qty}x ${i.name} ($${(i.price * i.qty).toFixed(2)})</div>`).join('')}
+          ${itemsHTML}
         </div>
         <div class="receipt-divider"></div>
         <div class="receipt-total">
@@ -145,6 +175,11 @@ function checkIncomingOrderRedirects() {
     simulateBotReactionToOrder(name, address, orderId, total);
     
     // 4. Clear URL parameters from address bar to avoid duplicate orders on refresh
+    window.history.replaceState({}, document.title, window.location.pathname);
+
+  } catch (err) {
+    console.error("Error processing incoming order redirect:", err);
+    // Still clear URL to avoid repeated errors
     window.history.replaceState({}, document.title, window.location.pathname);
   }
 }
@@ -306,18 +341,43 @@ async function handleUserMessageSend() {
   DOM.chatInput.value = "";
   appendChatMessage("user", text);
   
-  const catalogText = products.map(p => `- ${p.name} ($${p.price.toFixed(2)}): ${p.description || p.desc || ""}`).join("\n");
-  const systemPrompt = `Eres Nexus AI, un bot híbrido inteligente en español de toma de pedidos para un restaurante o negocio local.
-NUESTRO CATÁLOGO ACTUAL DE PRODUCTOS:
+  // Build catalog context grouped by business (CAG - Context Augmented Generation)
+  let catalogText = "";
+  if (products.length > 0) {
+    // Group by business
+    const byBiz = {};
+    products.forEach(p => {
+      const key = p._bizId || "general";
+      const name = p._bizName || key;
+      if (!byBiz[key]) byBiz[key] = { name, items: [] };
+      byBiz[key].items.push(p);
+    });
+
+    catalogText = Object.values(byBiz).map(biz => {
+      const itemLines = biz.items.map(p =>
+        `  • ${p.name} — $${parseFloat(p.price).toFixed(2)} [${p.category || 'comida'}]: ${p.description || p.desc || ""}`
+      ).join("\n");
+      return `📍 Negocio: ${biz.name}\n${itemLines}`;
+    }).join("\n\n");
+  } else {
+    catalogText = "(No hay productos cargados aún. Indica al cliente que vuelva en unos momentos.)";
+  }
+
+  const systemPrompt = `Eres Nexus AI, un asistente virtual inteligente de pedidos en ESPAÑOL para una plataforma multi-negocio.
+Tienes acceso al catálogo completo de TODOS los negocios registrados:
+
+===== CATÁLOGO COMPLETO POR NEGOCIO =====
 ${catalogText}
+==========================================
 
 INSTRUCCIONES CLAVE:
-1. Sé amable, servicial y responde de manera muy concisa (máximo 2 párrafos).
-2. Si el cliente quiere ver el menú, catálogo, la carta, comprar o añadir productos, dale el enlace al Catálogo PWA pulsando en el botón o link 'Ver Catálogo Web' (url: './catalog.html'). Explícale que una vez seleccione sus productos en la web, el pedido regresará automáticamente al bot de forma estructurada.
-3. Si pregunta por horarios: Abrimos de Martes a Domingo, de 12:00 PM a 11:00 PM.
-4. Si pregunta por envíos: Costo de envío a domicilio es $2.00, y es gratis en compras mayores a $15.00.
-5. Si pregunta métodos de pago: Aceptamos Efectivo al recibir, Transferencia Bancaria y Tarjetas de Crédito/Débito.
-6. Nunca inventes productos que no estén en el catálogo. Si preguntan por algo que no está, recomiéndales educadamente alguna opción del catálogo actual.`;
+1. Sé amable, conciso y siempre responde en español.
+2. Si el cliente quiere ver el menú, comprar o hacer un pedido, envíalo al Catálogo Web con el link: [Ver Catálogo Web](./catalog.html). Explícale que al confirmar su selección, el pedido regresará automáticamente aquí.
+3. Solo menciona productos que EXISTAN en el catálogo de arriba. Nunca inventes precios ni productos.
+4. Si un cliente pregunta por un negocio específico, muéstrale solo los productos de ese negocio.
+5. Horarios generales: Martes a Domingo, 12:00 PM a 11:00 PM (verifica con cada negocio si difieren).
+6. Envíos: $2.00 a domicilio, gratis en compras mayores a $15.00.
+7. Pagos aceptados: Efectivo, Transferencia Bancaria, Tarjeta de Crédito/Débito.`;
 
   const conversationContext = getChatContextForAPI(systemPrompt);
   const loadingId = appendChatLoading();
