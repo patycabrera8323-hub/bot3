@@ -49,12 +49,22 @@
         <!-- Left sidebar/tabs inside Admin -->
         <div class="admin-sidebar">
           <div class="card glass-card admin-tabs-card">
-            <button class="admin-tab active" data-admin-panel="panel-products">
+            <div class="form-group" style="padding: 0 4px 10px 4px; border-bottom: 1px solid var(--border-glass);">
+              <label for="admin-restaurant-select" style="font-size: 0.72rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase;">Tienda Activa:</label>
+              <select id="admin-restaurant-select" class="form-control" style="margin-top: 5px; background: rgba(0, 0, 0, 0.2); font-weight: 600; color: var(--color-primary);">
+                <!-- Dynamically loaded -->
+              </select>
+            </div>
+            
+            <button class="admin-tab active" data-admin-panel="panel-products" style="margin-top: 10px;">
               <i class="bx bx-food-menu"></i> Gestión de Productos
             </button>
             <button class="admin-tab" data-admin-panel="panel-orders">
               <i class="bx bx-receipt"></i> Historial de Pedidos
               <span class="admin-badge" id="admin-pending-badge">0</span>
+            </button>
+            <button class="admin-tab" data-admin-panel="panel-restaurant-config">
+              <i class="bx bx-store"></i> Configuración Tienda
             </button>
           </div>
         </div>
@@ -107,6 +117,42 @@
             </div>
           </div>
 
+          <!-- C. Restaurant Configuration -->
+          <div id="panel-restaurant-config" class="admin-subpanel">
+            <div class="panel-header">
+              <h2>Ajustes del Restaurante</h2>
+            </div>
+            <div class="card glass-card" style="padding: 24px;">
+              <form id="form-restaurant-config">
+                <div class="form-group">
+                  <label for="rest-name">Nombre Comercial *</label>
+                  <input type="text" id="rest-name" class="form-control" placeholder="Ej. Burger Shack" required>
+                </div>
+                <div class="form-row">
+                  <div class="form-group">
+                    <label for="rest-phone">Teléfono / WhatsApp *</label>
+                    <input type="text" id="rest-phone" class="form-control" placeholder="Ej. +54 9 11 1234 5678" required>
+                  </div>
+                  <div class="form-group">
+                    <label for="rest-schedule">Horario de Atención *</label>
+                    <input type="text" id="rest-schedule" class="form-control" placeholder="Ej. Mar - Dom, 12:00 a 23:00" required>
+                  </div>
+                </div>
+                <div class="form-group">
+                  <label for="rest-address">Dirección Física *</label>
+                  <input type="text" id="rest-address" class="form-control" placeholder="Ej. Av. Gourmet 123" required>
+                </div>
+                <div class="form-group">
+                  <label for="rest-logo">URL del Logo / Imagen</label>
+                  <input type="text" id="rest-logo" class="form-control" placeholder="https://ejemplo.com/logo.jpg">
+                </div>
+                <button type="submit" class="primary-btn" style="margin-top: 10px;">
+                  <i class="bx bx-save"></i> Guardar Cambios del Restaurante
+                </button>
+              </form>
+            </div>
+          </div>
+
         </div>
 
       </div>
@@ -153,6 +199,27 @@
             <button type="button" class="secondary-btn" id="btn-cancel-product-modal">Cancelar</button>
             <button type="submit" class="primary-btn">Guardar Producto</button>
           </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- LOGIN MODAL (Role verification) -->
+    <div class="modal-overlay active" id="modal-login" style="background: rgba(11, 15, 25, 0.95); backdrop-filter: blur(8px);">
+      <div class="card glass-card modal-card animate-slide-up" style="max-width: 400px; text-align: center; padding: 30px;">
+        <div style="margin-bottom: 20px;">
+          <i class="bx bx-shield-quarter" style="font-size: 3.5rem; color: var(--color-primary); text-shadow: 0 0 10px var(--color-primary-glow);"></i>
+          <h2 style="margin-top: 10px; font-size: 1.6rem;">Consola de Negocios</h2>
+          <p style="color: var(--text-muted); font-size: 0.85rem; margin-top: 4px;">Ingresa tu correo registrado para continuar</p>
+        </div>
+        <form id="form-login">
+          <div class="form-group" style="text-align: left;">
+            <label for="login-email">Correo Electrónico *</label>
+            <input type="email" id="login-email" class="form-control" placeholder="nombre@correo.com" required>
+          </div>
+          <div id="login-error-msg" style="color: var(--color-danger); font-size: 0.8rem; margin: 10px 0; text-align: left; display: none;"></div>
+          <button type="submit" class="primary-btn" style="width: 100%; margin-top: 10px; display: flex; justify-content: center; align-items: center; gap: 8px;">
+            <i class="bx bx-log-in-circle"></i> Verificar Acceso
+          </button>
         </form>
       </div>
     </div>

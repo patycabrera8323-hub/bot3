@@ -1,5 +1,6 @@
 /* ==========================================
    NEXUS AI - DELIVERY DRIVER BOARD LOGIC
+   Supports Role-Based Access Control and Multi-Restaurant Delivery Management
    ========================================== */
 
 import { 
@@ -9,10 +10,14 @@ import {
   doc, 
   onSnapshot, 
   updateDoc, 
-  query 
+  query,
+  where,
+  getDocs
 } from './firebase-config.js';
 
-let orders = JSON.parse(localStorage.getItem("nexus_orders")) || [];
+let orders = [];
+let driverRestaurantId = "";
+let ordersUnsubscribe = null;
 
 // --- DOM ELEMENTS REFERENCE ---
 const DOM = {
@@ -20,31 +25,99 @@ const DOM = {
   delivActiveCount: document.getElementById("deliv-active-count"),
   delivColPrepared: document.getElementById("deliv-col-prepared"),
   delivColTransit: document.getElementById("deliv-col-transit"),
-  delivColCompleted: document.getElementById("deliv-col-completed")
+  delivColCompleted: document.getElementById("deliv-col-completed"),
+
+  // Login Modal
+  modalLogin: document.getElementById("modal-login"),
+  formLogin: document.getElementById("form-login"),
+  loginEmail: document.getElementById("login-email"),
+  loginErrorMsg: document.getElementById("login-error-msg")
 };
 
 // --- INITIALIZATION ---
 document.addEventListener("DOMContentLoaded", () => {
-  initDelivery();
+  setupLoginHandler();
 });
 
-function initDelivery() {
+// Setup Verification Logic for Delivery Drivers
+function setupLoginHandler() {
+  DOM.formLogin.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const email = DOM.loginEmail.value.trim().toLowerCase();
+    DOM.loginErrorMsg.style.display = "none";
+    
+    if (!email) return;
+
+    if (isFirebaseEnabled) {
+      try {
+        const q = query(collection(db, "usuarios"), where("email", "==", email));
+        const querySnapshot = await getDocs(q);
+        
+        if (querySnapshot.empty) {
+          DOM.loginErrorMsg.innerText = "Acceso denegado. El correo no está registrado como repartidor.";
+          DOM.loginErrorMsg.style.display = "block";
+          return;
+        }
+
+        let isAuthorized = false;
+        querySnapshot.forEach((docSnap) => {
+          const u = docSnap.data();
+          if (u.role === "repartidor" || u.role === "admin") {
+            isAuthorized = true;
+            driverRestaurantId = u.restaurantId || "burger-shack";
+          }
+        });
+
+        if (isAuthorized) {
+          DOM.modalLogin.classList.remove("active");
+          startDeliveryConsole();
+        } else {
+          DOM.loginErrorMsg.innerText = "Acceso denegado. Este correo no tiene privilegios de repartidor.";
+          DOM.loginErrorMsg.style.display = "block";
+        }
+      } catch (err) {
+        console.error("Firebase Auth Error:", err);
+        DOM.loginErrorMsg.innerText = `Error al verificar: ${err.message}`;
+        DOM.loginErrorMsg.style.display = "block";
+      }
+    } else {
+      // Local fallback testing accounts
+      if (email === "reparto@nexus.com") {
+        driverRestaurantId = "burger-shack";
+        DOM.modalLogin.classList.remove("active");
+        startDeliveryConsole();
+      } else {
+        DOM.loginErrorMsg.innerText = "Acceso denegado. En modo local prueba con 'reparto@nexus.com'.";
+        DOM.loginErrorMsg.style.display = "block";
+      }
+    }
+  });
+}
+
+function startDeliveryConsole() {
   loadOrders();
 }
 
 function loadOrders() {
+  if (ordersUnsubscribe) {
+    ordersUnsubscribe();
+  }
+
   if (isFirebaseEnabled) {
-    const q = query(collection(db, "pedidos"));
-    onSnapshot(q, (snapshot) => {
+    const q = query(collection(db, "pedidos"), where("restaurantId", "==", driverRestaurantId));
+    ordersUnsubscribe = onSnapshot(q, (snapshot) => {
       const fbOrders = [];
       snapshot.forEach((doc) => {
         fbOrders.push({ firestoreId: doc.id, ...doc.data() });
       });
       orders = fbOrders;
-      localStorage.setItem("nexus_orders", JSON.stringify(orders));
+      localStorage.setItem(`nexus_orders_${driverRestaurantId}`, JSON.stringify(orders));
       renderDeliveryBoard();
     });
   } else {
+    // Local fallback: filter orders by driver's restaurant
+    const allOrders = JSON.parse(localStorage.getItem("nexus_orders")) || [];
+    orders = allOrders.filter(o => o.restaurantId === driverRestaurantId);
     renderDeliveryBoard();
   }
 }
@@ -158,11 +231,12 @@ async function advanceOrderStatus(refId, nextStatus) {
       console.error("Error updating status in Firebase:", e);
     }
   } else {
-    const order = orders.find(o => o.firestoreId === refId || o.id === refId);
+    const allOrders = JSON.parse(localStorage.getItem("nexus_orders")) || [];
+    const order = allOrders.find(o => o.firestoreId === refId || o.id === refId);
     if (order) {
       order.status = nextStatus;
-      localStorage.setItem("nexus_orders", JSON.stringify(orders));
-      renderDeliveryBoard();
+      localStorage.setItem("nexus_orders", JSON.stringify(allOrders));
+      loadOrders();
     }
   }
 }
