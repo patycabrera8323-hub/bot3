@@ -8,8 +8,13 @@ import {
   collection, 
   addDoc, 
   onSnapshot, 
-  query 
+  query,
+  where,
+  doc
 } from './firebase-config.js';
+
+const urlParams = new URLSearchParams(window.location.search);
+const currentRestaurantId = urlParams.get("restaurante") || "burger-shack";
 
 // --- INITIAL STATE & DEFAULT PRODUCTS ---
 const DEFAULT_PRODUCTS = [
@@ -86,22 +91,38 @@ function initCatalog() {
 // Load products either from Firebase or localStorage
 function loadProducts() {
   if (isFirebaseEnabled) {
-    const q = query(collection(db, "productos"));
+    // 1. Fetch restaurant metadata
+    const restRef = doc(db, "restaurantes", currentRestaurantId);
+    onSnapshot(restRef, (docSnap) => {
+      if (docSnap.exists()) {
+        const restData = docSnap.data();
+        const headerTitle = document.querySelector(".logo-text h1");
+        const headerDesc = document.querySelector(".logo-text p");
+        if (headerTitle) headerTitle.innerHTML = `NEXUS <span class="accent-text">${restData.name.toUpperCase()}</span>`;
+        if (headerDesc) headerDesc.innerText = restData.schedule || "Catálogo Digital PWA";
+      }
+    });
+
+    // 2. Fetch products for this restaurantId
+    const q = query(collection(db, "productos"), where("restaurantId", "==", currentRestaurantId));
     onSnapshot(q, (snapshot) => {
       const fbProducts = [];
       snapshot.forEach((doc) => {
         fbProducts.push({ id: doc.id, ...doc.data() });
       });
-      if (fbProducts.length > 0) {
-        products = fbProducts;
-        localStorage.setItem("nexus_products", JSON.stringify(products));
-      }
+      products = fbProducts;
+      localStorage.setItem("nexus_products", JSON.stringify(products));
       renderCatalog();
     }, (error) => {
       console.error("Error fetching Firestore products:", error);
       renderCatalog();
     });
   } else {
+    // If offline fallback, filter products array by currentRestaurantId
+    const hasRestaurantProducts = products.some(p => p.restaurantId === currentRestaurantId);
+    if (hasRestaurantProducts) {
+      products = products.filter(p => p.restaurantId === currentRestaurantId);
+    }
     renderCatalog();
   }
 }
@@ -265,7 +286,8 @@ async function submitCheckout() {
     items: [...cart],
     total: total,
     time: orderTime,
-    status: "pendiente"
+    status: "pendiente",
+    restaurantId: currentRestaurantId
   };
   
   // 1. Write order to database
@@ -289,7 +311,7 @@ async function submitCheckout() {
   localStorage.setItem("nexus_cart", JSON.stringify(cart));
   
   // Redirect URL building
-  const redirectUrl = `./index.html?orderCreated=true&orderId=${orderId}&name=${encodeURIComponent(name)}&total=${total}&address=${encodeURIComponent(address)}&items=${encodedItems}`;
+  const redirectUrl = `./index.html?orderCreated=true&orderId=${orderId}&name=${encodeURIComponent(name)}&total=${total}&address=${encodeURIComponent(address)}&items=${encodedItems}&restaurante=${currentRestaurantId}`;
   
   window.location.href = redirectUrl;
 }
