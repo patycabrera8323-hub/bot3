@@ -3,7 +3,7 @@
    Enables offline catalog capability and speed.
    ========================================== */
 
-const CACHE_NAME = "nexus-cache-v2";
+const CACHE_NAME = "nexus-cache-v3";
 const ASSETS_TO_CACHE = [
   "./",
   "./index.html",
@@ -44,25 +44,21 @@ self.addEventListener("activate", (event) => {
   );
 });
 
-// Fetch Event - Serve Cached Assets when offline (Cache-First / Network-Fallback)
+// Fetch Event - Serve Cached Assets when offline (Network-First for local assets, Cache-First for external)
 self.addEventListener("fetch", (event) => {
-  // Skip cross-origin POST requests or API calls (e.g. Nvidia/Gemini APIs)
+  // Skip non-GET requests
   if (event.request.method !== "GET") {
     return;
   }
 
-  event.respondWith(
-    caches.match(event.request).then((cachedResponse) => {
-      if (cachedResponse) {
-        return cachedResponse;
-      }
-      
-      return fetch(event.request).then((networkResponse) => {
-        // Cache dynamic assets on the fly (images, external resources)
-        if (
-          networkResponse.status === 200 && 
-          (event.request.url.startsWith("http") || event.request.url.includes("unsplash.com") || event.request.url.includes("icons8.com"))
-        ) {
+  const url = event.request.url;
+  const isLocalAsset = url.includes(self.location.origin);
+
+  // Strategy A: Network-First for local assets (ensures we get the latest script updates)
+  if (isLocalAsset) {
+    event.respondWith(
+      fetch(event.request).then((networkResponse) => {
+        if (networkResponse && networkResponse.status === 200) {
           const responseToCache = networkResponse.clone();
           caches.open(CACHE_NAME).then((cache) => {
             cache.put(event.request, responseToCache);
@@ -70,11 +66,37 @@ self.addEventListener("fetch", (event) => {
         }
         return networkResponse;
       }).catch(() => {
-        // Fallback for document pages if completely offline
-        if (event.request.mode === "navigate") {
-          return caches.match("./index.html");
+        // Offline: fall back to cache
+        return caches.match(event.request).then((cachedResponse) => {
+          if (cachedResponse) {
+            return cachedResponse;
+          }
+          if (event.request.mode === "navigate") {
+            return caches.match("./index.html");
+          }
+          return new Response("Offline", { status: 503, statusText: "Service Unavailable" });
+        });
+      })
+    );
+  } else {
+    // Strategy B: Cache-First for external static assets (fonts, icons, unsplash)
+    event.respondWith(
+      caches.match(event.request).then((cachedResponse) => {
+        if (cachedResponse) {
+          return cachedResponse;
         }
-      });
-    })
-  );
+        return fetch(event.request).then((networkResponse) => {
+          if (networkResponse && networkResponse.status === 200) {
+            const responseToCache = networkResponse.clone();
+            caches.open(CACHE_NAME).then((cache) => {
+              cache.put(event.request, responseToCache);
+            });
+          }
+          return networkResponse;
+        }).catch(() => {
+          return new Response("Offline", { status: 503, statusText: "Service Unavailable" });
+        });
+      })
+    );
+  }
 });
